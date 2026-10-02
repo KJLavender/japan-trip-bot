@@ -84,3 +84,25 @@ test("prices the model invents are flagged; prices from the photo are not", asyn
   assert.deepEqual(unverifiedPrices("上海麺 580円（≈ NT$117）、焼餃子 180円", "上海麺\n焼餃子"), [580, 180]);
   assert.deepEqual(unverifiedPrices("冷奴 180円、生ビール ¥1,200", "冷奴180円\n生ビール 1,200円"), []);
 });
+
+test("Wikidata dictionary: loaded, hand-checked entries win, kana words need boundaries", async () => {
+  const { WIKI_FOODS } = await import("../src/knowledge/glossary.js");
+  assert.ok(WIKI_FOODS.length > 3000, `only ${WIKI_FOODS.length} entries`);
+  const zh = (t: string) => findTerms(t, FOODS, WIKI_FOODS).map((x) => x.zh);
+  assert.ok(zh("キンメダイ煮付け 1,090円").some((z) => z.includes("金眼鯛")));
+  assert.ok(zh("白子ポン酢").some((z) => z.startsWith("白子（魚的精巢")), "curated 白子 must beat Wikidata");
+  assert.ok(zh("ブリの照り焼き 650円").includes("鰤魚"));
+  // Kana-only species names must not fire inside longer katakana words.
+  const ayu = WIKI_FOODS.find((t) => t.ja.includes("アユ"));
+  if (ayu) assert.equal(findTerms("ガアユタ", [ayu]).length, 0);
+});
+
+test("truncateLines keeps whole lines and marks the cut", async () => {
+  const { truncateLines } = await import("../src/photo.js");
+  const long = Array.from({ length: 50 }, (_, i) => `第 ${i} 行：一些解說內容`).join("\n");
+  const out = truncateLines(long, 120);
+  assert.ok(out.length < 160);
+  assert.match(out, /^第 0 行/);
+  assert.match(out, /內容較長/);
+  assert.equal(truncateLines("短", 120), "短");
+});

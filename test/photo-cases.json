@@ -1,5 +1,5 @@
 {
-  "_comment": "Real-world photo eval set. Images are NOT redistributed: `npm run eval:photos` downloads them from the original source into test/photos/ (gitignored). `expect` = regexes the explanation must all match; `reject` = must not match.",
+  "_comment": "Real-world photo eval set. Images are NOT redistributed: `npm run eval:photos` downloads them from the original source into test/photos/ (gitignored). `expect` = regexes the explanation must all match; `reject` = must not match. `set`: dev = photos used while tuning the glossary/prompts; holdout = never used for tuning, the honest score.",
   "cases": [
     {
       "file": "menu-handwritten.jpg",
@@ -11,7 +11,8 @@
       "expect": [
         "生魚片|刺身|鮪魚|鮪",
         "推薦|今晚|今日|今宵"
-      ]
+      ],
+      "set": "dev"
     },
     {
       "file": "menu-sushi-order.jpg",
@@ -24,7 +25,8 @@
         "壽司|握壽司",
         "芥末|山葵|哇沙米|ワサビ",
         "鮪|まぐろ|マグロ"
-      ]
+      ],
+      "set": "dev"
     },
     {
       "file": "menu-glare.jpg",
@@ -38,7 +40,8 @@
         "毛豆|枝豆|蠶豆|そら豆",
         "豆腐|冷奴",
         "啤酒"
-      ]
+      ],
+      "set": "dev"
     },
     {
       "file": "menu-wall-vertical.jpg",
@@ -54,7 +57,8 @@
       ],
       "reject": [
         "天鵝"
-      ]
+      ],
+      "set": "dev"
     },
     {
       "file": "ticket-machine.jpg",
@@ -66,7 +70,8 @@
       "expect": [
         "食券|餐券|售票|券|投幣|按鈕|買票",
         "拉麵|らーめん|ラーメン|麵"
-      ]
+      ],
+      "set": "dev"
     },
     {
       "file": "drugstore-shelf.jpg",
@@ -77,7 +82,8 @@
       "question": "這些是什麼藥",
       "expect": [
         "胃|腸"
-      ]
+      ],
+      "set": "dev"
     },
     {
       "file": "notice-monorail.jpg",
@@ -89,7 +95,8 @@
       "expect": [
         "停駛|停運|運休|停止|暫停|停開|不開|休",
         "單軌|モノレール|monorail|Monorail"
-      ]
+      ],
+      "set": "dev"
     },
     {
       "file": "no-text-kaiseki.jpg",
@@ -100,7 +107,8 @@
       "question": "這是什麼",
       "expect": [
         "會席|懷石|会席|懐石|日式料理|日本料理|套餐|定食|料理"
-      ]
+      ],
+      "set": "dev"
     },
     {
       "file": "no-text-shrine.jpg",
@@ -112,7 +120,100 @@
       "expect": [
         "籤|おみくじ|御神籤|神籤",
         "燈籠|灯籠|石燈|燈"
-      ]
+      ],
+      "set": "dev"
+    },
+    {
+      "file": "holdout-unagi-banners.jpg",
+      "url": "https://live.staticflickr.com/2246/2315446157_6d430e471e_b.jpg",
+      "source": "https://www.flickr.com/photo.gne?id=2315446157",
+      "license": "CC BY 2.0",
+      "scene": "鰻魚店直書手寫菜單（蒲焼、白焼、手羽先、若鳥）",
+      "question": "這家賣什麼",
+      "expect": [
+        "鰻",
+        "雞"
+      ],
+      "set": "holdout"
+    },
+    {
+      "file": "holdout-tsukemen-sizes.jpg",
+      "url": "https://live.staticflickr.com/5094/5464289874_1338f4caa0_b.jpg",
+      "source": "https://www.flickr.com/photo.gne?id=5464289874",
+      "license": "CC BY 2.0",
+      "scene": "沾麵價目看板，並/中/大/特大 份量，斜拍",
+      "question": "這要怎麼點",
+      "expect": [
+        "沾麵|つけ麺|つけめん",
+        "份量|大小|克|公克|g|並|特大"
+      ],
+      "set": "holdout"
+    },
+    {
+      "file": "holdout-ramen-rules.jpg",
+      "url": "https://live.staticflickr.com/3106/3217609888_189d9a323e_b.jpg",
+      "source": "https://www.flickr.com/photo.gne?id=3217609888",
+      "license": "CC BY-SA 2.0",
+      "scene": "拉麵店店規海報（關手機、別久坐）與禁菸、禁用手機標誌",
+      "question": "這寫什麼",
+      "expect": [
+        "手機|電話",
+        "禁菸|禁煙|不能抽|吸菸|抽菸"
+      ],
+      "set": "holdout"
+    },
+    {
+      "file": "holdout-horumon-menu.jpg",
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Yakitori_Menu_-_Tokyo_Japan.jpg?width=1600",
+      "source": "https://commons.wikimedia.org/wiki/File:Yakitori_Menu_-_Tokyo_Japan.jpg",
+      "license": "CC BY-SA 2.0",
+      "scene": "手寫內臟烤串（ホルモン）菜單，附英文",
+      "question": "這是什麼",
+      "expect": [
+        "內臟|内臟|雜碎|ホルモン",
+        "串|烤"
+      ],
+      "set": "holdout"
+    },
+    {
+      "file": "holdout-kaiten-plates.jpg",
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Tokyo-Kaiten_sushi,_Japan_(2010).jpg?width=1600",
+      "source": "https://commons.wikimedia.org/wiki/File:Tokyo-Kaiten_sushi,_Japan_(2010).jpg",
+      "license": "CC BY 3.0",
+      "scene": "迴轉壽司：盤子顏色價目表與魚名木牌",
+      "question": "這要怎麼吃",
+      "expect": [
+        "盤|碟",
+        "顏色|色",
+        "壽司"
+      ],
+      "set": "holdout"
+    },
+    {
+      "file": "holdout-hato-bus.jpg",
+      "url": "https://live.staticflickr.com/5174/5535083359_16e9e7fa77_b.jpg",
+      "source": "https://www.flickr.com/photo.gne?id=5535083359",
+      "license": "CC BY-SA 2.0",
+      "scene": "哈多巴士（はとバス）Hello Kitty 觀光巴士海報與東京觀光服務台",
+      "question": "這是什麼",
+      "expect": [
+        "巴士|バス",
+        "觀光|旅遊|導覽|服務台|案內"
+      ],
+      "set": "holdout"
+    },
+    {
+      "file": "holdout-taiyaki.jpg",
+      "url": "https://live.staticflickr.com/1924/44781261814_8ac39bb222_b.jpg",
+      "source": "https://www.flickr.com/photo.gne?id=44781261814",
+      "license": "CC BY-SA 2.0",
+      "scene": "人形町柳屋鯛魚燒店招牌與小倉冰淇淋",
+      "question": "這家賣什麼",
+      "expect": [
+        "鯛魚燒|鯛焼|たい焼",
+        "紅豆|小倉|冰淇淋|アイス"
+      ],
+      "set": "holdout"
     }
   ]
 }

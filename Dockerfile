@@ -14,6 +14,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build /app/dist ./dist
+COPY src/knowledge/wikidata-foods.json ./dist/knowledge/
 COPY AGENTS.md ./
 RUN mkdir -p /app/data && chown node:node /app/data
 USER node

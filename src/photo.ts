@@ -4,11 +4,12 @@ import { config } from "./config.js";
 import { ask } from "./agent.js";
 import { isLlmUp } from "./llm-health.js";
 import { ocrImage } from "./ocr.js";
+import { geminiEnabled, lookupTerms, unknownFragments } from "./gemini.js";
 import {
   detectAlcohol, detectAllergens, detectDrugWarnings, detectRaw, drugClass, drugDosage, type Hit,
 } from "./knowledge/safety.js";
 import {
-  FOODS, MENU_TERMS, NOTICE_TERMS, OMAMORI, OMIKUJI_FIELDS, OMIKUJI_LEVELS, PRODUCT_TERMS, findTerms, type Term,
+  FOODS, MENU_TERMS, NOTICE_TERMS, OMAMORI, OMIKUJI_FIELDS, OMIKUJI_LEVELS, PRODUCT_TERMS, WIKI_FOODS, findTerms, type Term,
 } from "./knowledge/glossary.js";
 
 // ---- 判斷使用者在問哪一張照片 ----
@@ -96,7 +97,7 @@ export function analyzeText(text: string): PhotoAnalysis {
   const facts: string[] = [];
 
   if (kind === "menu" || kind === "product") {
-    const foods = findTerms(text, FOODS);
+    const foods = findTerms(text, FOODS, WIKI_FOODS);
     const allergens = detectAllergens(text);
     // Dishes that usually contain an allergen even when the menu doesn't spell it out.
     const implied = new Map<string, string[]>();
@@ -199,7 +200,7 @@ export async function toVisionImage(buf: Buffer): Promise<ImageContent> {
   return { type: "image", data: out.toString("base64"), mimeType: "image/jpeg" };
 }
 
-const EMPTY_ANALYSIS: PhotoAnalysis = { kind: "general", header: [], facts: [] };
+const emptyAnalysis = (): PhotoAnalysis => ({ kind: "general", header: [], facts: [] });
 
 /**
  * Photo → OCR → code-checked facts → the model explains, looking at the photo itself as well.
@@ -215,7 +216,14 @@ export async function explainOcrText(
   image?: Buffer,
 ): Promise<string> {
   const hasText = text.replace(/\s/g, "").length >= 4;
-  const analysis = hasText ? analyzeText(text) : EMPTY_ANALYSIS;
+  const analysis = hasText ? analyzeText(text) : emptyAnalysis();
+  // Words no local dictionary knows → Gemini (text fragments only; cached). Not for drugs:
+  // medical facts come from the label and code, never from a model.
+  if (hasText && analysis.kind !== "drug" && geminiEnabled()) {
+    const known = findTerms(text, FOODS, WIKI_FOODS, MENU_TERMS, NOTICE_TERMS, PRODUCT_TERMS);
+    const looked = await lookupTerms(unknownFragments(text, known));
+    analysis.facts.push(...looked.map((t) => `${t.ja[0]}＝${t.zh}${t.note ? `（${t.note}）` : ""}〔AI 查詢〕`));
+  }
   const head = hasText ? [KIND_LABEL[analysis.kind], ...analysis.header].join("\n") : "";
   const withHead = (body: string) => [head, body, PHOTO_DISCLAIMER].filter(Boolean).join("\n\n");
 
@@ -227,12 +235,14 @@ export async function explainOcrText(
   const images = image && config.visionEnabled ? [await toVisionImage(image)] : [];
   if (!hasText && images.length === 0) return "照片上讀不到文字 🙏 可以拍近一點、正一點再試一次嗎？";
 
-  const explanation = await ask(chatId, senderName, buildPrompt(text, analysis, question, images.length > 0), images, {
+  let explanation = await ask(chatId, senderName, buildPrompt(text, analysis, question, images.length > 0), images, {
     systemPrompt: PHOTO_SYSTEM_PROMPT,
     noTools: true,
+    maxTokens: 700,
     historyText: `（傳了一張${KIND_LABEL[analysis.kind].slice(2)}照片）${question}`,
   });
   const unverified = unverifiedPrices(explanation, text);
+  explanation = truncateLines(explanation, MAX_PHOTO_REPLY_CHARS);
   return withHead(unverified.length ? `${explanation}\n\n${PRICE_WARNING}` : explanation);
 }
 
@@ -253,4 +263,21 @@ export async function explainPhoto(chatId: string, senderName: string, buf: Buff
   const lines = await ocrImage(buf);
   const text = (lines ?? []).filter((l) => l.score >= 0.5).map((l) => normalizeOcr(l.text)).join("\n");
   return explainOcrText(chatId, senderName, text, question, buf);
+}
+
+/** Phone-sized: the head and disclaimer add ~200 chars on top. */
+const MAX_PHOTO_REPLY_CHARS = 900;
+
+/** Cut at the last full line that fits, so a reply never ends mid-sentence. */
+export function truncateLines(text: string, max: number): string {
+  if (text.length <= max) return text;
+  const lines = text.split("\n");
+  const kept: string[] = [];
+  let len = 0;
+  for (const line of lines) {
+    if (len + line.length + 1 > max) break;
+    kept.push(line);
+    len += line.length + 1;
+  }
+  return `${kept.join("\n").trimEnd()}\n…（內容較長，想知道哪一項可以再問我）`;
 }
