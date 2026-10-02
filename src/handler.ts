@@ -7,6 +7,8 @@ import {
 } from "./ledger.js";
 import { addMemo, deleteMemo, archiveMemos, formatMemos } from "./memo.js";
 import { bestPhrase, formatPhrase } from "./phrases.js";
+import { parseExpense } from "./expense-parser.js";
+import { recordExpense } from "./tools.js";
 import { config } from "./config.js";
 
 export const HELP = `🗾 ${config.botName} 使用說明
@@ -97,6 +99,16 @@ async function fastPath(chatId: string, senderName: string, text: string): Promi
     const quoted = t.match(/[「『"“](.+?)[」』"”]/)?.[1];
     const p = bestPhrase(quoted ?? t);
     if (p) return formatPhrase(p);
+  }
+
+  // 記帳：句型明確就由程式解析，模糊的才交給 LLM
+  const parsed = parseExpense(t, senderName, loadLedger(chatId).members);
+  if (parsed) {
+    try {
+      return await recordExpense(chatId, senderName, parsed);
+    } catch (err) {
+      return errorText(err);
+    }
   }
 
   if (/^(新旅程|封存)$/.test(t)) {

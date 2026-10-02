@@ -71,7 +71,7 @@ function getSession(chatId: string): Session {
   let s = sessions.get(chatId);
   if (s) return s;
 
-  const ctx: ChatContext = { chatId, senderName: "" };
+  const ctx: ChatContext = { chatId, senderName: "", userText: "", toolsUsed: [] };
   const agent = new Agent({
     initialState: {
       systemPrompt: systemPrompt(chatId),
@@ -85,7 +85,10 @@ function getSession(chatId: string): Session {
     transformContext: async (msgs) => pruneContext(msgs),
   });
   agent.subscribe((event) => {
-    if (event.type === "tool_execution_start") console.log(`[agent] tool ${event.toolName}`);
+    if (event.type === "tool_execution_start") {
+      ctx.toolsUsed.push(event.toolName);
+      console.log(`[agent] tool ${event.toolName}`);
+    }
     if (event.type === "agent_end") {
       agent.state.messages = stripImages(pruneContext(agent.state.messages));
       writeJson("sessions", chatId, agent.state.messages);
@@ -112,6 +115,17 @@ export function stripMarkdown(text: string): string {
     .join("\n");
 }
 
+export const NOT_SAVED_MESSAGE =
+  "⚠️ 抱歉，我剛剛沒有真的記下來。請換個說法再說一次，例如：\n「燒肉 18000 円 阿凱付，大家分」\n「記一下：飯店是 APA 新宿」";
+
+/** The model says it logged/saved something, but no write tool ran this turn. */
+export function claimsUnsavedWrite(reply: string, toolsUsed: string[], userText: string): boolean {
+  const writes = ["add_expense", "memo_add", "delete_expense", "memo_delete", "set_members"];
+  if (toolsUsed.some((t) => writes.includes(t))) return false;
+  // Only guard requests that ask to write something; questions like "迪士尼是哪天" may mention 記錄 harmlessly.
+  if (!/\d|付|分|請客|記|刪|新增|成員|一萬|千/.test(userText)) return false;
+  return /已(?:經)?(?:幫[你您])?(?:記|記錄|記下|記帳|紀錄|登記|新增|刪除)|記下來了|幫[你您](?:記|記錄|記下)|(?:記|記錄)好了|记录|记下/.test(reply);
+}
 
 function lastAssistantText(messages: AgentMessage[]): string {
   // Terminating tools end the run on their own results; a batch may hold several.
@@ -152,6 +166,8 @@ export async function ask(chatId: string, senderName: string, text: string, imag
   globalPending++;
   const run = s.queue.then(async () => {
     s.ctx.senderName = senderName;
+    s.ctx.userText = text;
+    s.ctx.toolsUsed = [];
     s.agent.state.systemPrompt = systemPrompt(chatId);
     const timer = setTimeout(() => s.agent.abort(), config.llmTimeoutMs);
     try {
@@ -169,6 +185,10 @@ export async function ask(chatId: string, senderName: string, text: string, imag
       return "抱歉，我現在有點當機 🙇 請稍後再試一次。";
     }
     let reply = lastAssistantText(s.agent.state.messages) || "（沒有回應）";
+    if (claimsUnsavedWrite(reply, s.ctx.toolsUsed, text)) {
+      console.warn("[agent] model claimed to save without calling a tool");
+      return NOT_SAVED_MESSAGE;
+    }
     reply = annotateTwd(stripMarkdown(reply), (await getJpyTwd()).jpyToTwd);
     if (hasUnverifiedPhrase(reply)) reply += `\n\n${AI_TRANSLATION_WARNING}`;
     return reply;
