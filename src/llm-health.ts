@@ -36,7 +36,15 @@ export async function checkModel(): Promise<void> {
       console.warn(`⚠️ 找不到模型 ${config.ollamaModel}，請執行：npm run setup:model`);
       return;
     }
-    const info = (await res.json()) as { parameters?: string };
+    const info = (await res.json()) as { parameters?: string; capabilities?: string[] };
+    const caps = info.capabilities ?? [];
+    if (!caps.includes("tools")) {
+      console.warn(`⚠️ ${config.ollamaModel} 不支援工具呼叫（tools），自然語言記帳、記事會無法運作。請換模型。`);
+    }
+    if (config.visionEnabled && !caps.includes("vision")) {
+      config.visionEnabled = false;
+      console.warn(`ℹ️ ${config.ollamaModel} 不支援看圖，已關閉視覺備援（照片只走 OCR）。`);
+    }
     const numCtx = Number(info.parameters?.match(/num_ctx\s+(\d+)/)?.[1] ?? 0);
     if (numCtx < 8192) {
       console.warn(

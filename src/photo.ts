@@ -180,21 +180,24 @@ async function toVisionImage(buf: Buffer): Promise<ImageContent> {
  * Falls back to the vision model when OCR is unavailable or finds no text,
  * and to a facts-only answer when the LLM is offline.
  */
+/** The part after OCR: classify, code-checked facts, then the LLM explains. */
+export async function explainText(chatId: string, senderName: string, text: string, question = ""): Promise<string> {
+  const analysis = analyzeText(text);
+  const head = [`${KIND_LABEL[analysis.kind]}`, ...analysis.header].join("\n");
+  if (!(await isLlmUp())) {
+    const glossary = analysis.facts.length ? `\n\n📖 重點用語\n${analysis.facts.join("\n")}` : "";
+    return `${head}${glossary}\n\n🤖 AI 暫時離線，以上是程式辨識的重點。\n\n${PHOTO_DISCLAIMER}`;
+  }
+  const explanation = await ask(chatId, senderName, buildPrompt(text, analysis, question));
+  return `${head}\n\n${explanation}\n\n${PHOTO_DISCLAIMER}`;
+}
+
 export async function explainPhoto(chatId: string, senderName: string, buf: Buffer, question = ""): Promise<string> {
   const lines = await ocrImage(buf);
   // NFKC: OCR often returns full-width digits (１日3回), which would slip past the regexes.
   const text = (lines ?? []).filter((l) => l.score >= 0.5).map((l) => l.text.normalize("NFKC")).join("\n");
 
-  if (text.replace(/\s/g, "").length >= 4) {
-    const analysis = analyzeText(text);
-    const head = [`${KIND_LABEL[analysis.kind]}`, ...analysis.header].join("\n");
-    if (!(await isLlmUp())) {
-      const glossary = analysis.facts.length ? `\n\n📖 重點用語\n${analysis.facts.join("\n")}` : "";
-      return `${head}${glossary}\n\n🤖 AI 暫時離線，以上是程式辨識的重點。\n\n${PHOTO_DISCLAIMER}`;
-    }
-    const explanation = await ask(chatId, senderName, buildPrompt(text, analysis, question));
-    return `${head}\n\n${explanation}\n\n${PHOTO_DISCLAIMER}`;
-  }
+  if (text.replace(/\s/g, "").length >= 4) return explainText(chatId, senderName, text, question);
 
   if (!config.visionEnabled) return "照片上讀不到文字 🙏 可以拍近一點、正一點再試一次嗎？";
   const explanation = await ask(

@@ -93,3 +93,19 @@ test("AI offline: non-AI commands still work, AI ones get a clear message", asyn
     config.ollamaBaseUrl = original;
   }
 });
+
+test("withSpeaker adds the speaker only for '（我）跟X分' phrasing", async () => {
+  const { withSpeaker } = await import("../src/tools.js");
+  assert.deepEqual(withSpeaker(["小華"], "阿珍", "早餐 1200 我出的，跟小華對分"), ["阿珍", "小華"]);
+  assert.deepEqual(withSpeaker(["阿凱"], "小明", "我跟阿凱分"), ["小明", "阿凱"]);
+  assert.deepEqual(withSpeaker(["小華", "阿珍"], "小明", "小華跟阿珍分"), ["小華", "阿珍"]);
+  assert.deepEqual(withSpeaker(["阿凱"], "小明", "東西是阿凱的，我先幫他付"), ["阿凱"]);
+});
+
+test("claimsUnsavedWrite catches 'I logged it' without a tool call", async () => {
+  const { claimsUnsavedWrite } = await import("../src/agent.js");
+  assert.equal(claimsUnsavedWrite("沒問題，已幫您記錄下來：阿凱買藥妝 ¥6,800", [], "藥妝 6800 我先幫他付"), true);
+  assert.equal(claimsUnsavedWrite("沒問題！我幫您記下這筆帳", [], "小華請大家喝咖啡 2400 円"), true);
+  assert.equal(claimsUnsavedWrite("已記帳 #1：燒肉 ¥18,000", ["add_expense"], "燒肉 一萬八"), false);
+  assert.equal(claimsUnsavedWrite("記事裡已記錄：迪士尼是 10/15", [], "我們迪士尼是哪天？"), false);
+});

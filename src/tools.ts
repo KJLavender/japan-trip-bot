@@ -7,11 +7,26 @@ import {
 } from "./ledger.js";
 import { searchPhrases, bestPhrase, formatPhrase } from "./phrases.js";
 import { addMemo, deleteMemo } from "./memo.js";
+import type { ParsedExpense } from "./expense-parser.js";
 
 /** Per-chat context. `senderName` is updated before every prompt. */
 export interface ChatContext {
   chatId: string;
   senderName: string;
+  /** The current user message, for sanity checks on what the model extracted. */
+  userText: string;
+  /** Tools actually executed during the current run. */
+  toolsUsed: string[];
+}
+
+/**
+ * "（我）跟小華（對）分" means the speaker plus 小華; small models often drop the speaker.
+ * Only applies when nothing but "我" or punctuation precedes 跟/和, so "小華跟阿珍分" is untouched.
+ */
+export function withSpeaker(participants: string[], speaker: string, userText: string): string[] {
+  if (participants.includes(speaker)) return participants;
+  const impliesSpeaker = /(?:^|[\s，,。]|我)(?:跟|和|與)\s*[^\s，,。]{1,10}?\s*(?:一起)?\s*(?:對分|平分|分)/.test(userText);
+  return impliesSpeaker ? [speaker, ...participants] : participants;
 }
 
 const defineTool = <T extends TSchema>(tool: AgentTool<T>): AgentTool<any> => tool;
@@ -37,40 +52,19 @@ export function createTools(ctx: ChatContext): AgentTool<any>[] {
       split_count: Type.Optional(Type.Number({ description: "分攤人數（只有給人數沒給名字時使用）" })),
     }),
     executionMode: "sequential",
-    execute: async (_id, p) => {
-      const ledger = loadLedger(ctx.chatId);
-      addMembers(ledger, [ctx.senderName]);
-      const payer = resolveName(p.payer ?? "我");
-
-      let participants: string[];
-      if (p.participants?.length) {
-        participants = [...new Set<string>(p.participants.map(resolveName))];
-      } else if (p.split_count && p.split_count !== ledger.members.length) {
-        throw new Error(
-          `目前成員只有 ${ledger.members.length} 位（${ledger.members.join("、")}），和 ${p.split_count} 人分不符。` +
-            "請問使用者分攤者的名字，或請大家先用 set_members 登記成員。",
-        );
-      } else {
-        participants = [...ledger.members];
-      }
-
-      let amountJpy = p.amount;
-      let original: { amount: number; currency: "TWD"; rate: number } | undefined;
-      if (p.currency === "TWD") {
-        const { jpyToTwd } = await getJpyTwd();
-        amountJpy = p.amount / jpyToTwd;
-        original = { amount: p.amount, currency: "TWD", rate: jpyToTwd };
-      }
-
-      const e = addExpense(ledger, { description: p.description, payer, amountJpy, original, participants });
-      saveLedger(ctx.chatId, ledger);
-      const { jpyToTwd } = await getJpyTwd();
-      const each = e.amountJpy / participants.length;
-      return done(
-        `已記帳 #${e.id}：${e.description} ${fmtJpy(e.amountJpy)}（≈ ${fmtTwd(e.amountJpy * jpyToTwd)}），` +
-          `${payer} 付，${participants.join("、")} 分，每人約 ${fmtJpy(each)}（≈ ${fmtTwd(each * jpyToTwd)}）`,
-      );
-    },
+    execute: async (_id, p) =>
+      done(
+        await recordExpense(ctx.chatId, ctx.senderName, {
+          description: p.description,
+          amount: p.amount,
+          currency: p.currency,
+          payer: resolveName(p.payer ?? "我"),
+          participants: p.participants?.length
+            ? withSpeaker(p.participants.map(resolveName), ctx.senderName, ctx.userText)
+            : undefined,
+          splitCount: p.split_count,
+        }),
+      ),
   });
 
   const listExpensesTool = defineTool({
@@ -186,4 +180,41 @@ export function createTools(ctx: ChatContext): AgentTool<any>[] {
     addExpenseTool, listExpensesTool, settleTool, deleteExpenseTool, setMembersTool, fxRateTool,
     phraseTool, memoAddTool, memoDeleteTool,
   ];
+}
+
+/**
+ * Record an expense and return the confirmation text. Shared by the add_expense tool
+ * and the rule-based parser so both paths validate and word things identically.
+ */
+export async function recordExpense(chatId: string, senderName: string, p: ParsedExpense): Promise<string> {
+  const ledger = loadLedger(chatId);
+  addMembers(ledger, [senderName]);
+
+  let participants: string[];
+  if (p.participants?.length) {
+    participants = [...new Set(p.participants)];
+  } else if (p.splitCount && p.splitCount !== ledger.members.length) {
+    throw new Error(
+      `目前成員只有 ${ledger.members.length} 位（${ledger.members.join("、")}），和 ${p.splitCount} 人分不符。` +
+        "請說出分攤者的名字，或先用「成員 小明 小華…」登記成員。",
+    );
+  } else {
+    participants = [...ledger.members];
+  }
+
+  const { jpyToTwd } = await getJpyTwd();
+  let amountJpy = p.amount;
+  let original: { amount: number; currency: "TWD"; rate: number } | undefined;
+  if (p.currency === "TWD") {
+    amountJpy = p.amount / jpyToTwd;
+    original = { amount: p.amount, currency: "TWD", rate: jpyToTwd };
+  }
+
+  const e = addExpense(ledger, { description: p.description, payer: p.payer, amountJpy, original, participants });
+  saveLedger(chatId, ledger);
+  const each = e.amountJpy / participants.length;
+  return (
+    `已記帳 #${e.id}：${e.description} ${fmtJpy(e.amountJpy)}（≈ ${fmtTwd(e.amountJpy * jpyToTwd)}），` +
+    `${p.payer} 付，${participants.join("、")} 分，每人約 ${fmtJpy(each)}（≈ ${fmtTwd(each * jpyToTwd)}）`
+  );
 }

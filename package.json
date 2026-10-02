@@ -9,7 +9,8 @@
     "chat": "tsx scripts/chat.ts",
     "setup:model": "tsx scripts/setup-model.ts",
     "build": "tsc -p tsconfig.build.json",
-    "backup": "tsx scripts/backup.ts"
+    "backup": "tsx scripts/backup.ts",
+    "eval": "tsx scripts/eval.ts"
   },
   "keywords": [],
   "author": "",
