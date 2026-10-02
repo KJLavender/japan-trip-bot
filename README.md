@@ -223,6 +223,45 @@ LINE ─webhook─▶ src/index.ts ──▶ src/handler.ts ──┬─ 固定�
 
 ---
 
+## ☁️ 部署
+
+上面「安裝與啟動」的做法（家裡電腦加 Cloudflare quick tunnel）適合**開發、測試和朋友試用**。如果想讓 bot 全天候運作，建議依需求選擇下面的架構。
+
+### 架構 A：家裡一台機器全包（Docker Compose）
+
+```bash
+cp .env.example .env              # 填入 LINE 的兩個值
+docker compose up -d              # bot 連到宿主機上的 Ollama
+docker compose --profile ollama up -d   # 或：Ollama 也放進容器（需要 NVIDIA Container Toolkit）
+```
+
+- 容器以非 root 使用者執行，根目錄唯讀、移除所有 Linux capabilities，只有 `data/` 可以寫入
+- port 只綁 `127.0.0.1`，對外請透過 Cloudflare Tunnel（建議用 named tunnel，網址才不會變）
+
+### 架構 B（推薦正式使用）：bot 放雲端、模型放家裡
+
+```
+LINE ──▶ 雲端 VM（bot + data）──Tailscale 私有網路──▶ 家裡電腦（Ollama + GPU）
+```
+
+- 雲端 VM 可以用 Oracle Cloud Always Free 這類免費或低價方案，只跑 bot，不需要 GPU
+- **家裡電腦關機時，bot 仍然在線**：結算、帳目、記事、匯率、日文句庫都不經過 AI，照常可以用；AI 功能會回覆「暫時離線」
+- 兩邊都安裝 [Tailscale](https://tailscale.com)，在 VM 的 `.env` 設定 `OLLAMA_BASE_URL=http://<家裡電腦的 Tailscale IP>:11434/v1`
+
+> ⚠️ **Ollama 沒有任何驗證機制，絕對不要把 11434 port 開放到公網或路由器的 port forwarding。** 任何人連得到就能使用你的 GPU、下載或刪除模型。請只透過 Tailscale 這類私有網路連線，並讓 Ollama 只監聽 `127.0.0.1` 或 Tailscale 介面，不要用 `0.0.0.0`。
+
+### 架構 C：長期（Homelab）
+
+如果你本來就有 K3s 或 Kubernetes，可以把 bot、Ollama、監控（Grafana、Loki）放在同一套基礎設施上。單純跑這個 bot 的話，Docker Compose 就夠用了。
+
+### 費用與維護
+
+- 家裡電腦全天候開機（以 RTX 3060 Ti 等級的桌機估算），一個月大約 50～70 度電、NT$150～250。建議只在旅行期間開 AI
+- 定期備份：`npm run backup` 會把 `data/` 複製到 `backups/<時間>/`
+- Render、Railway 這類平台的免費方案通常**沒有永久硬碟**，重啟後資料會消失，不適合直接放這個 bot
+
+---
+
 ## 🔒 資安設計
 
 - **Webhook 簽章驗證**：每個請求都會用 Channel secret 驗證 `x-line-signature`，失敗回 401，不會洩漏錯誤細節
@@ -230,7 +269,9 @@ LINE ─webhook─▶ src/index.ts ──▶ src/handler.ts ──┬─ 固定�
 - **路徑安全**：寫檔用的 chatId 只接受英數字，其他一律雜湊，避免路徑穿越
 - **工具權限最小化**：agent 只能讀寫自己群組的帳本和記事，沒有執行指令、讀任意檔案或上網的工具
 - **提示詞注入防護**：記事內容會標示為「資料而不是指令」，算錢的邏輯也不經過 AI
-- **資源限制**：訊息上限 1,000 字、照片上限 8 MB、每個群組最多排隊 3 則請求、記事上限 100 則
+- **資源限制**：訊息上限 1,000 字、照片上限 8 MB、每個群組最多排隊 3 則、全部群組合計最多 8 則、記事上限 100 則、AI 回應逾時 90 秒
+- **容器強化**：非 root 執行、唯讀根目錄、移除所有 capabilities、`no-new-privileges`，port 只綁 127.0.0.1
+- **資料完整性**：寫檔採用「先寫暫存檔再改名」的原子寫入，當機也不會留下寫到一半的帳本
 - **依賴套件**：CI 每次都會跑 `npm audit`，並已開啟 Dependabot 警示。transitive 依賴 `basic-ftp` 的已知漏洞已透過 `overrides` 升級修補
 
 發現資安問題時，請透過 GitHub 的 [Security Advisories](https://github.com/KJLavender/japan-trip-bot/security/advisories/new) 私下回報，不要開公開 issue。
@@ -254,6 +295,8 @@ npm test            # 單元測試（分帳、句庫、記事、路徑安全、M
 npm run typecheck   # TypeScript 型別檢查
 npm run chat -- 小明 # 本機 REPL，不需要 LINE
 npm run dev         # 開發模式（自動重啟）
+npm run backup      # 備份 data/
+npm run build       # 編譯到 dist/（Docker 會用到）
 ```
 
 ## 📄 授權

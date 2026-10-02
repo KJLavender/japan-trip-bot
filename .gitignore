@@ -1,6 +1,8 @@
 node_modules/
+dist/
 # 執行期資料：群組 ID、成員名字、帳目、記事、對話紀錄
 data/
+backups/
 # 機密
 .env
 .env.*

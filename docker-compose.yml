@@ -1,0 +1,44 @@
+# 用法：
+#   docker compose up -d                    # 只跑 bot，Ollama 在本機或其他主機（OLLAMA_BASE_URL）
+#   docker compose --profile ollama up -d   # bot + Ollama 一起跑（需要 NVIDIA Container Toolkit）
+services:
+  bot:
+    build: .
+    image: japan-trip-bot
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # 預設連到宿主機上的 Ollama；用 ollama profile 時改成 http://ollama:11434/v1
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434/v1}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      # 只綁 127.0.0.1：對外一律透過 Cloudflare Tunnel 或反向代理，不直接開放
+      - "127.0.0.1:${PORT:-3000}:3000"
+    volumes:
+      - ./data:/app/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  ollama:
+    profiles: ["ollama"]
+    image: ollama/ollama
+    restart: unless-stopped
+    # 不對外開 port：只有同一個 compose 網路裡的 bot 連得到（Ollama 沒有驗證機制）
+    volumes:
+      - ollama:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+volumes:
+  ollama:

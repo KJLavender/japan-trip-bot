@@ -7,7 +7,9 @@
     "test": "tsx --test test/*.test.ts",
     "typecheck": "tsc --noEmit",
     "chat": "tsx scripts/chat.ts",
-    "setup:model": "tsx scripts/setup-model.ts"
+    "setup:model": "tsx scripts/setup-model.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "backup": "tsx scripts/backup.ts"
   },
   "keywords": [],
   "author": "",

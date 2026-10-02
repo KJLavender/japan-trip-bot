@@ -15,9 +15,13 @@ export function readJson<T>(kind: string, chatId: string, fallback: T): T {
   return existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : fallback;
 }
 
+/** Write to a temp file then rename, so a crash mid-write never leaves a half-written ledger. */
 export function writeJson(kind: string, chatId: string, value: unknown) {
   mkdirSync(join(config.dataDir, kind), { recursive: true });
-  writeFileSync(dataPath(kind, chatId), JSON.stringify(value, null, 2));
+  const file = dataPath(kind, chatId);
+  const tmp = `${file}.${process.pid}.tmp`;
+  writeFileSync(tmp, JSON.stringify(value, null, 2));
+  renameSync(tmp, file);
 }
 
 /** Move a chat's file into DATA_DIR/archive (used when a trip ends). */
