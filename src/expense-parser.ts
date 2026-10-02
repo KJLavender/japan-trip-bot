@@ -21,13 +21,15 @@ export function parseExpense(text: string, sender: string, members: string[]): P
   const t = text.normalize("NFKC").replace(/\s+/g, " ").trim();
 
   // Amount + currency. Exactly one amount, otherwise it's ambiguous.
-  const amountRe = /(?:(NT\$|台幣|新台幣|¥|￥)\s*([\d,]+)|([\d,]+)\s*(円|日圓|日幣|JPY|元|台幣|塊))/g;
+  // Thousands separators only with exactly three digits after the comma: NFKC turns
+  // 「6600，15隻」 into "6600,15隻", which must not read as 660,015.
+  const amountRe = /(?:(NT\$|台幣|新台幣|¥|￥)\s*(\d{1,3}(?:,\d{3})+|\d+)|(\d{1,3}(?:,\d{3})+|\d+)\s*(円|日圓|日幣|JPY|元|台幣|塊))/g;
   const amounts = [...t.matchAll(amountRe)];
   let amountMatch = amounts[0];
   let bare: RegExpMatchArray | undefined;
   if (amounts.length === 0) {
     // "燒肉 18000 我付" — a bare number is fine when the sentence clearly talks about paying.
-    const nums = [...t.matchAll(/(?<![\d:/])(\d[\d,]{2,})(?![\d:/])/g)];
+    const nums = [...t.matchAll(/(?<![\d:/])(\d{1,3}(?:,\d{3})+|\d{3,})(?![\d:/])/g)];
     if (nums.length !== 1 || !/付|分|請客/.test(t)) return undefined;
     bare = nums[0];
   } else if (amounts.length > 1) {
@@ -82,4 +84,75 @@ export function parseExpense(text: string, sender: string, members: string[]): P
       .slice(0, 30) || "花費";
 
   return { description, amount, currency, payer, participants, splitCount };
+}
+
+// ---- 數量：「每隻 6600，15 隻」「6600 x 15」「每晚 2000 總共 4 晚」 ----
+
+// 人 is left out on purpose: "4人分" is a split, not a quantity.
+const UNIT = "隻|個|晚|張|份|件|盒|瓶|包|杯|碗|串|盤|片|本|台|罐|袋|顆|條";
+const UNIT_COUNT = new RegExp(`(\\d+)\\s*(${UNIT})(?!\\s*(?:分|平分))`);
+const UNIT_COUNT_ALL = new RegExp(`\\d+\\s*(?:${UNIT})|[x×*＊]\\s*\\d+`, "g");
+const ONE_UNIT_BEFORE = new RegExp(`(?:每|一|1)\\s*(?:${UNIT})?\\s*[¥￥]?\\s*$`);
+const UNIT_EDGES = new RegExp(`^(?:${UNIT})|(?:${UNIT})$`, "g");
+
+export type QuantityResult = { kind: "ask"; message: string } | { kind: "expense"; parsed: ParsedExpense };
+
+/**
+ * Expenses that mention a count. The small model silently read
+ * 「東方娃娃 6600 日幣 總共 15 隻」 as a total when the user meant 6600 each,
+ * so genuinely ambiguous phrasing gets a question instead of a guess.
+ */
+export function parseQuantityExpense(text: string, sender: string, members: string[]): QuantityResult | undefined {
+  if (text.includes("\n")) return undefined; // several items: leave to the LLM
+  const t = text.normalize("NFKC").replace(/\s+/g, " ").trim();
+
+  const unitCount = t.match(UNIT_COUNT);
+  const timesCount = t.match(/\d\s*[x×*＊]\s*(\d+)/);
+  if (!unitCount && !timesCount) return undefined;
+  const qty = Number((unitCount ?? timesCount)![1]);
+  const unit = unitCount?.[2] ?? "個";
+
+  const money = [...t.matchAll(/(\d{1,3}(?:,\d{3})+(?!\d)|\d{3,})/g)]
+    .map((m) => ({ n: Number(m[1].replace(/,/g, "")), at: m.index! }))
+    .filter((m) => m.n !== qty);
+  if (money.length !== 1 || !(qty > 1 && qty <= 999)) return undefined;
+  const price = money[0].n;
+  const before = t.slice(Math.max(0, money[0].at - 4), money[0].at);
+
+  const perUnit = Boolean(timesCount) || ONE_UNIT_BEFORE.test(before);
+  const isTotal = /總共|一共|合計|共計|全部|共/.test(before);
+  const currency: "JPY" | "TWD" = /台幣|NT\$|元|塊/.test(t) ? "TWD" : "JPY";
+  const fmt = (n: number) => (currency === "TWD" ? `NT$${n.toLocaleString("en-US")}` : `¥${n.toLocaleString("en-US")}`);
+
+  if (perUnit === isTotal) {
+    return {
+      kind: "ask",
+      message:
+        "🤔 想確認一下是哪一種：\n" +
+        `① 每${unit} ${fmt(price)}，${qty} ${unit}一共 ${fmt(price * qty)}\n` +
+        `② ${qty} ${unit}加起來一共 ${fmt(price)}\n\n` +
+        `請再說一次，例如「每${unit} ${price}，${qty} ${unit}」或「${qty} ${unit}總共 ${price}」`,
+    };
+  }
+
+  // Payer/split follow the normal parser's rules; with no split mentioned it's the speaker's own purchase.
+  const splitSaid = /分|大家|只有|自己/.test(t);
+  const base = parseExpense(`${t.replace(UNIT_COUNT_ALL, "")}${splitSaid ? "" : " 只有我自己的"}`, sender, members);
+  const fallback = t
+    .replace(UNIT_COUNT_ALL, " ")
+    .replace(/(?:NT\$|[¥￥])?\s*\d[\d,]*\s*(?:円|日圓|日幣|元|塊|台幣|JPY)?/g, " ")
+    .split(/[\s，,。]+/)[0];
+  const description =
+    (base?.description || fallback || "").replace(/每|總共|一共|合計|共計|全部|共/g, "").replace(UNIT_EDGES, "").trim() || "花費";
+  return {
+    kind: "expense",
+    parsed: {
+      description: `${description} ×${qty}`,
+      amount: perUnit ? price * qty : price,
+      currency,
+      payer: base?.payer ?? sender,
+      participants: base ? base.participants : [sender],
+      splitCount: base?.splitCount,
+    },
+  };
 }
