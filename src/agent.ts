@@ -163,6 +163,8 @@ export interface AskOptions {
   noTools?: boolean;
   /** Cap output length for this turn (small models ignore "最多 12 行"). */
   maxTokens?: number;
+  /** Run without the chat history (it is restored afterwards, with this exchange appended). */
+  isolated?: boolean;
   /** Store this instead of the full prompt in history (keeps OCR dumps out of later context). */
   historyText?: string;
 }
@@ -191,6 +193,9 @@ export async function ask(
     const model = s.agent.state.model;
     if (opts.maxTokens) s.agent.state.model = { ...model, maxTokens: opts.maxTokens };
     if (opts.noTools) s.agent.state.tools = [];
+    // Isolated turns (photos) don't need the chat history: it only makes the prompt long and slow.
+    const history = opts.isolated ? s.agent.state.messages : undefined;
+    if (history) s.agent.state.messages = [];
     const timer = setTimeout(() => s.agent.abort(), config.llmTimeoutMs);
     try {
       await s.agent.prompt(`[${senderName}] ${text}`, images);
@@ -198,10 +203,10 @@ export async function ask(
       clearTimeout(timer);
       s.agent.state.tools = tools;
       s.agent.state.model = model;
-      if (opts.historyText) {
-        compactLastUserMessage(s.agent, `[${senderName}] ${opts.historyText}`);
-        writeJson("sessions", chatId, s.agent.state.messages);
-      }
+      // Put the exchange back into the history so follow-up questions still have context.
+      if (history) s.agent.state.messages = [...history, ...s.agent.state.messages];
+      if (opts.historyText) compactLastUserMessage(s.agent, `[${senderName}] ${opts.historyText}`);
+      if (history || opts.historyText) writeJson("sessions", chatId, s.agent.state.messages);
     }
     if (s.agent.state.errorMessage) {
       console.error(`[agent] error:`, s.agent.state.errorMessage);

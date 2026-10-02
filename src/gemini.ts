@@ -60,8 +60,8 @@ const SCHEMA = {
     properties: {
       input: { type: "STRING" },
       ja: { type: "STRING", description: "正確的日文寫法（OCR 錯字要改正）" },
-      zh: { type: "STRING", description: "繁體中文（台灣用語）名稱" },
-      note: { type: "STRING", description: "一句話說明，台灣觀光客看得懂" },
+      zh: { type: "STRING", description: "只放繁體中文名稱，10 個字以內，例如「日式炸雞」；說明不要放這裡" },
+      note: { type: "STRING", description: "一句話說明（40 字以內），台灣觀光客看得懂" },
       useful: { type: "BOOLEAN", description: "是不是有意義的料理、食材、飲料、商品或告示用語" },
     },
     required: ["input", "useful"],
@@ -70,7 +70,7 @@ const SCHEMA = {
 
 const PROMPT = `以下是日本觀光客拍的照片（菜單、商品、告示）經過 OCR 讀出的日文片段，可能有 OCR 錯字。
 對每個片段回傳一筆：
-- 如果是料理、食材、飲料、商品或告示用語：useful=true，ja 填正確寫法（OCR 錯字要改正），zh 填繁體中文（台灣用語）名稱，note 用一句話說明它是什麼、口味或特色。
+- 如果是料理、食材、飲料、商品或告示用語：useful=true，ja 填正確寫法（OCR 錯字要改正），zh 只填繁體中文名稱（10 字以內，不要放說明），note 用一句話（40 字以內）說明它是什麼、口味或特色。
 - 如果是店名、人名、無意義的 OCR 雜訊，或你不確定：useful=false。不確定就填 false，不要猜。
 片段：
 `;
@@ -97,7 +97,7 @@ export async function lookupTerms(fragments: string[]): Promise<Term[]> {
         contents: [{ parts: [{ text: PROMPT + missing.map((m) => `- ${m}`).join("\n") }] }],
         generationConfig: { temperature: 0.2, responseMimeType: "application/json", responseSchema: SCHEMA, ...thinking },
       }),
-      signal: AbortSignal.timeout(10_000),
+      signal: AbortSignal.timeout(20_000),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const body = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
