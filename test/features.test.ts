@@ -132,3 +132,8 @@ test("regressions from real LINE testing", async () => {
   assert.equal(dropUnsafeLines("沒過敏原，也沒酒和藥成分喔！\n這是寶可夢玩偶", []), "這是寶可夢玩偶");
   assert.equal(dropUnsafeLines("⚠️ 過敏原：蝦（エビ）。\n1. コロッケ", ["⚠️ 過敏原：蝦（エビ）"]), "1. コロッケ");
 });
+
+test("東方娃娃: ambiguous quantity asks, clear per-unit phrasing multiplies", async () => {
+  assert.match(await handleText("g10", "KJ", "東方娃娃6600日幣總共15隻"), /想確認一下是哪一種/);
+  assert.match(await handleText("g10", "KJ", "東方娃娃每隻6600，15隻"), /已記帳 #1：東方娃娃 ×15 ¥99,000/);
+});

@@ -7,7 +7,7 @@ import {
 } from "./ledger.js";
 import { addMemo, deleteMemo, archiveMemos, formatMemos } from "./memo.js";
 import { bestPhrase, formatPhrase } from "./phrases.js";
-import { parseExpense } from "./expense-parser.js";
+import { parseExpense, parseQuantityExpense } from "./expense-parser.js";
 import { recordExpense } from "./tools.js";
 import { config } from "./config.js";
 
@@ -105,7 +105,16 @@ async function fastPath(chatId: string, senderName: string, text: string): Promi
   const route = parseRoute(t);
   if (route) return routeReply(route.from, route.to);
 
-  // 記帳：句型明確就由程式解析，模糊的才交給 LLM
+  // 記帳：有數量的先處理（單價 × 數量，說法模糊就反問），再處理一般句型；都不明確才交給 LLM
+  const quantity = parseQuantityExpense(t, senderName, loadLedger(chatId).members);
+  if (quantity?.kind === "ask") return quantity.message;
+  if (quantity?.kind === "expense") {
+    try {
+      return await recordExpense(chatId, senderName, quantity.parsed);
+    } catch (err) {
+      return errorText(err);
+    }
+  }
   const parsed = parseExpense(t, senderName, loadLedger(chatId).members);
   if (parsed) {
     try {
