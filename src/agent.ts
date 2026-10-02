@@ -224,6 +224,7 @@ export async function ask(
     }
     reply = annotateTwd(stripMarkdown(reply), (await getJpyTwd()).jpyToTwd);
     if (hasUnverifiedPhrase(reply)) reply += `\n\n${AI_TRANSLATION_WARNING}`;
+    else if (isUncitedKnowledge(reply, s.ctx.toolsUsed, Boolean(opts.systemPrompt))) reply += `\n\n${GENERAL_KNOWLEDGE_WARNING}`;
     return reply;
   });
   s.queue = run.catch(() => {}).finally(() => {
@@ -248,4 +249,14 @@ function compactLastUserMessage(agent: Agent, summary: string) {
 export function archiveSession(chatId: string) {
   sessions.delete(chatId);
   archiveJson("sessions", chatId);
+}
+
+export const GENERAL_KNOWLEDGE_WARNING = "ℹ️ 這是 AI 的一般知識，可能過時或不正確（實測會講錯景點資訊），重要的事請以官網為準。";
+
+/**
+ * A substantial chat answer that used no tool and cites no memo (#n) came from the model's
+ * own memory — e.g. Tokyo Tower facts it got wrong. Photo turns carry their own disclaimer.
+ */
+export function isUncitedKnowledge(reply: string, toolsUsed: string[], customPrompt: boolean): boolean {
+  return !customPrompt && toolsUsed.length === 0 && reply.length > 80 && !/#\d/.test(reply);
 }

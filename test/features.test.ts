@@ -109,3 +109,26 @@ test("claimsUnsavedWrite catches 'I logged it' without a tool call", async () =>
   assert.equal(claimsUnsavedWrite("已記帳 #1：燒肉 ¥18,000", ["add_expense"], "燒肉 一萬八"), false);
   assert.equal(claimsUnsavedWrite("記事裡已記錄：迪士尼是 10/15", [], "我們迪士尼是哪天？"), false);
 });
+
+test("transit questions get a Google Maps link, not an AI route", async () => {
+  const { parseRoute, routeReply } = await import("../src/handler.js");
+  assert.deepEqual(parseRoute("成田到上野怎麼去？"), { from: "成田", to: "上野" });
+  assert.deepEqual(parseRoute("上野 Dormy Inn 從成田要怎麼去"), { from: "成田", to: "上野 Dormy Inn" });
+  assert.deepEqual(parseRoute("從新宿到淺草要怎麼搭"), { from: "新宿", to: "淺草" });
+  assert.equal(parseRoute("明天幾點集合"), undefined);
+  assert.match(routeReply("成田", "上野"), /maps\/dir\/\?api=1&travelmode=transit&origin=%E6%88%90%E7%94%B0/);
+  assert.match(await handleText("g9", "小明", "成田到上野怎麼去"), /google\.com\/maps/);
+});
+
+test("regressions from real LINE testing", async () => {
+  const { annotateTwd } = await import("../src/fx.js");
+  const { hasUnverifiedPhrase } = await import("../src/phrases.js");
+  const { isUncitedKnowledge } = await import("../src/agent.js");
+  const { dropUnsafeLines } = await import("../src/photo.js");
+  assert.equal(annotateTwd("1 JPY = 0.2021 TWD；¥6,600", 0.2), "1 JPY = 0.2021 TWD；¥6,600（≈ NT$1,320）");
+  assert.equal(hasUnverifiedPhrase("✅ 日文：鳥貴族でカードは使えますか？\n🔤 假名：とりきぞく\n🗣️ 羅馬拼音：Torikizoku"), true);
+  assert.equal(isUncitedKnowledge("東京鐵塔".repeat(30), [], false), true);
+  assert.equal(isUncitedKnowledge("根據 #1：迪士尼是 10/15，".repeat(10), [], false), false);
+  assert.equal(dropUnsafeLines("沒過敏原，也沒酒和藥成分喔！\n這是寶可夢玩偶", []), "這是寶可夢玩偶");
+  assert.equal(dropUnsafeLines("⚠️ 過敏原：蝦（エビ）。\n1. コロッケ", ["⚠️ 過敏原：蝦（エビ）"]), "1. コロッケ");
+});

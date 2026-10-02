@@ -58,7 +58,8 @@ export function createTools(ctx: ChatContext): AgentTool<any>[] {
           description: p.description,
           amount: p.amount,
           currency: p.currency,
-          payer: resolveName(p.payer ?? "我"),
+          // Models sometimes send "" for the payer; that means the speaker.
+          payer: resolveName(p.payer?.trim() || "我"),
           participants: p.participants?.length
             ? withSpeaker(p.participants.map(resolveName), ctx.senderName, ctx.userText)
             : undefined,

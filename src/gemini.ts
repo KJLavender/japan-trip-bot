@@ -53,25 +53,31 @@ export function unknownFragments(text: string, known: Term[], limit = 15): strin
   return out;
 }
 
+// No per-field descriptions: the model echoed them into the values ("…請勿放這裏…").
 const SCHEMA = {
   type: "ARRAY",
   items: {
     type: "OBJECT",
     properties: {
       input: { type: "STRING" },
-      ja: { type: "STRING", description: "正確的日文寫法（OCR 錯字要改正）" },
-      zh: { type: "STRING", description: "只放繁體中文名稱，10 個字以內，例如「日式炸雞」；說明不要放這裡" },
-      note: { type: "STRING", description: "一句話說明（40 字以內），台灣觀光客看得懂" },
-      useful: { type: "BOOLEAN", description: "是不是有意義的料理、食材、飲料、商品或告示用語" },
+      ja: { type: "STRING" },
+      zh: { type: "STRING" },
+      note: { type: "STRING" },
+      useful: { type: "BOOLEAN" },
     },
     required: ["input", "useful"],
   },
 };
 
-const PROMPT = `以下是日本觀光客拍的照片（菜單、商品、告示）經過 OCR 讀出的日文片段，可能有 OCR 錯字。
-對每個片段回傳一筆：
-- 如果是料理、食材、飲料、商品或告示用語：useful=true，ja 填正確寫法（OCR 錯字要改正），zh 只填繁體中文名稱（10 字以內，不要放說明），note 用一句話（40 字以內）說明它是什麼、口味或特色。
-- 如果是店名、人名、無意義的 OCR 雜訊，或你不確定：useful=false。不確定就填 false，不要猜。
+const PROMPT = `以下是日本觀光客拍的照片（菜單、商品、藥品、告示）經過 OCR 讀出的日文片段，可能有 OCR 錯字。每個片段回傳一筆：
+- input：原本的片段
+- ja：正確的日文寫法（OCR 錯字要改正）
+- zh：繁體中文（台灣用語）名稱，只放名稱，12 個字以內
+- note：一句話說明，40 個字以內。藥品只寫用途類別，不寫劑量或用法
+- useful：料理、食材、飲料、商品、藥品名稱或告示用語填 true；店名、人名、OCR 雜訊或不確定填 false，不要猜
+
+範例：[{"input":"唐揚子","ja":"唐揚げ","zh":"日式炸雞","note":"醬油醃過的雞肉塊裹粉油炸，居酒屋常見","useful":true},{"input":"田中商店","useful":false}]
+
 片段：
 `;
 
@@ -106,7 +112,9 @@ export async function lookupTerms(fragments: string[]): Promise<Term[]> {
     for (const r of rows) {
       if (!missing.includes(r.input)) continue; // ignore anything we didn't ask about
       const useful = Boolean(r.useful && r.zh && r.ja);
-      cache.terms[r.input] = { ja: (r.ja || r.input).slice(0, 30), zh: (r.zh ?? "").slice(0, 40), note: r.note?.slice(0, 80), useful };
+      // Keep the name short even if the model runs on (it sometimes glues notes onto the name).
+      const zh = (r.zh ?? "").split(/[，,。；;（(｜|\s]/)[0].slice(0, 15);
+      cache.terms[r.input] = { ja: (r.ja || r.input).slice(0, 30), zh, note: r.note?.slice(0, 80), useful: useful && Boolean(zh) };
       if (useful) found.push(cache.terms[r.input]);
     }
   } catch (err) {

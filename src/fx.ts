@@ -18,7 +18,7 @@ export async function getJpyTwd(): Promise<FxRate> {
     const body = (await res.json()) as { result: string; rates: Record<string, number>; time_last_update_utc: string };
     const twd = body.rates?.TWD;
     if (body.result !== "success" || !twd) throw new Error("bad response");
-    const rate = { jpyToTwd: twd, source: "open.er-api.com", updatedAt: body.time_last_update_utc };
+    const rate = { jpyToTwd: twd, source: "ExchangeRate-API", updatedAt: body.time_last_update_utc };
     cache = { rate, fetchedAt: Date.now() };
     return rate;
   } catch (err) {
@@ -40,6 +40,7 @@ const MODEL_TWD = /\s*(?:[（(]\s*≈?\s*NT\$\s*[\d,.]+\s*[）)]|(?:≈|\/|／)\
 export function annotateTwd(text: string, jpyToTwd: number): string {
   return text.replace(MODEL_TWD, "").replace(YEN, (m, a, b) => {
     const jpy = Number((a ?? b).replace(/,/g, ""));
-    return Number.isFinite(jpy) && jpy > 0 ? `${m}（≈ ${fmtTwd(jpy * jpyToTwd)}）` : m;
+    // Skip tiny amounts like "1 JPY = 0.20 TWD" in rate explanations.
+    return Number.isFinite(jpy) && jpy >= 10 ? `${m}（≈ ${fmtTwd(jpy * jpyToTwd)}）` : m;
   });
 }

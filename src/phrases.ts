@@ -102,7 +102,7 @@ export const AI_TRANSLATION_WARNING = "⚠️ 這句不在內建句庫，是 AI 
 
 /** True if the text contains a phrase card whose romaji isn't from the phrasebook. */
 export function hasUnverifiedPhrase(text: string): boolean {
-  // A phrase card has all three markers; a lone 🗣 emoji in prose isn't one.
-  const isCard = ["🇯🇵", "🔤", "🗣"].every((m) => text.includes(m));
+  // A phrase card: a romaji line plus a kana line (models vary the emoji, so accept the labels too).
+  const isCard = (text.includes("🗣") || text.includes("羅馬拼音")) && (text.includes("🔤") || text.includes("假名"));
   return isCard && !PHRASES.some((p) => text.includes(p.romaji));
 }

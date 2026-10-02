@@ -101,6 +101,10 @@ async function fastPath(chatId: string, senderName: string, text: string): Promi
     if (p) return formatPhrase(p);
   }
 
+  // 交通：不讓 AI 回答路線（實測會編造轉乘），一律給 Google Maps 即時路線
+  const route = parseRoute(t);
+  if (route) return routeReply(route.from, route.to);
+
   // 記帳：句型明確就由程式解析，模糊的才交給 LLM
   const parsed = parseExpense(t, senderName, loadLedger(chatId).members);
   if (parsed) {
@@ -151,4 +155,26 @@ export async function handleText(
     if (fast !== undefined) return fast;
   }
   return ask(chatId, senderName, text, images);
+}
+
+const HOW = /(?:要)?(?:怎麼|如何|怎樣)(?:去|走|搭|坐|到|過去)/;
+
+/** "成田到上野怎麼去" / "上野 Dormy Inn 從成田要怎麼去" → { from, to }. */
+export function parseRoute(text: string): { from: string; to: string } | undefined {
+  const t = text.replace(/[？?。!！]+$/, "").trim();
+  const m1 = t.match(new RegExp(`^(?:請問)?(?:從)?\s*(.{1,25}?)\s*(?:到|→|->)\s*(.{1,25}?)\s*${HOW.source}`));
+  if (m1) return { from: m1[1].trim(), to: m1[2].trim() };
+  const m2 = t.match(new RegExp(`^(.{1,25}?)\s*從\s*(.{1,25}?)\s*${HOW.source}`));
+  if (m2) return { from: m2[2].trim(), to: m2[1].trim() };
+  return undefined;
+}
+
+export function routeReply(from: string, to: string): string {
+  const url =
+    "https://www.google.com/maps/dir/?api=1&travelmode=transit" +
+    `&origin=${encodeURIComponent(from)}&destination=${encodeURIComponent(to)}`;
+  return (
+    `🚆 ${from} → ${to}\n即時路線、時間和票價請看 Google Maps：\n${url}\n\n` +
+    "小幫手不自己回答轉乘細節：班次和票價常變動，AI 也容易講錯 🙏"
+  );
 }

@@ -106,3 +106,10 @@ test("truncateLines keeps whole lines and marks the cut", async () => {
   assert.match(out, /內容較長/);
   assert.equal(truncateLines("短", 120), "短");
 });
+
+test("katakana compounds ending in a known word still match (ミンチカツ → カツ)", () => {
+  const names = findTerms("ミンチカツ ¥130\nエビカツ ¥90", FOODS).map((t) => t.zh);
+  assert.ok(names.some((n) => n.includes("炸豬排") || n.includes("蝦")), JSON.stringify(names));
+  const katsu = FOODS.find((t) => t.ja.includes("カツ"))!;
+  assert.equal(findTerms("カツオのたたき", [katsu]).length, 0, "カツオ (bonito) is not カツ");
+});
