@@ -16,6 +16,8 @@ export interface ChatContext {
 
 const defineTool = <T extends TSchema>(tool: AgentTool<T>): AgentTool<any> => tool;
 const text = (t: string) => ({ content: [{ type: "text" as const, text: t }], details: {} });
+/** Final, user-facing result: the run ends here so the model can't misquote it. */
+const done = (t: string) => ({ ...text(t), terminate: true });
 
 export function createTools(ctx: ChatContext): AgentTool<any>[] {
   const resolveName = (n: string) => (["我", "me", "自己"].includes(n.trim()) ? ctx.senderName : n.trim());
@@ -64,7 +66,7 @@ export function createTools(ctx: ChatContext): AgentTool<any>[] {
       saveLedger(ctx.chatId, ledger);
       const { jpyToTwd } = await getJpyTwd();
       const each = e.amountJpy / participants.length;
-      return text(
+      return done(
         `已記帳 #${e.id}：${e.description} ${fmtJpy(e.amountJpy)}（≈ ${fmtTwd(e.amountJpy * jpyToTwd)}），` +
           `${payer} 付，${participants.join("、")} 分，每人約 ${fmtJpy(each)}（≈ ${fmtTwd(each * jpyToTwd)}）`,
       );
@@ -76,7 +78,7 @@ export function createTools(ctx: ChatContext): AgentTool<any>[] {
     label: "帳目",
     description: "列出這趟旅程目前所有帳目與總額。",
     parameters: Type.Object({}),
-    execute: async () => text(formatExpenses(loadLedger(ctx.chatId), (await getJpyTwd()).jpyToTwd)),
+    execute: async () => done(formatExpenses(loadLedger(ctx.chatId), (await getJpyTwd()).jpyToTwd)),
   });
 
   const settleTool = defineTool({
@@ -86,7 +88,7 @@ export function createTools(ctx: ChatContext): AgentTool<any>[] {
     parameters: Type.Object({}),
     execute: async () => {
       const fx = await getJpyTwd();
-      return text(formatSettlement(loadLedger(ctx.chatId), fx.jpyToTwd, fx.source));
+      return done(formatSettlement(loadLedger(ctx.chatId), fx.jpyToTwd, fx.source));
     },
   });
 
@@ -100,7 +102,7 @@ export function createTools(ctx: ChatContext): AgentTool<any>[] {
       const ledger = loadLedger(ctx.chatId);
       const e = removeExpense(ledger, p.id);
       saveLedger(ctx.chatId, ledger);
-      return text(`已刪除 #${e.id} ${e.description} ${fmtJpy(e.amountJpy)}`);
+      return done(`已刪除 #${e.id} ${e.description} ${fmtJpy(e.amountJpy)}`);
     },
   });
 
@@ -114,7 +116,7 @@ export function createTools(ctx: ChatContext): AgentTool<any>[] {
       const ledger = loadLedger(ctx.chatId);
       addMembers(ledger, [ctx.senderName, ...p.names.map(resolveName)]);
       saveLedger(ctx.chatId, ledger);
-      return text(`目前成員（${ledger.members.length} 位）：${ledger.members.join("、")}`);
+      return done(`目前成員（${ledger.members.length} 位）：${ledger.members.join("、")}`);
     },
   });
 
@@ -134,7 +136,7 @@ export function createTools(ctx: ChatContext): AgentTool<any>[] {
           ? `\n${fmtTwd(p.amount)} ≈ ${fmtJpy(p.amount / fx.jpyToTwd)}`
           : `\n${fmtJpy(p.amount)} ≈ ${fmtTwd(p.amount * fx.jpyToTwd)}`;
       }
-      return text(msg);
+      return done(msg);
     },
   });
 
@@ -148,7 +150,7 @@ export function createTools(ctx: ChatContext): AgentTool<any>[] {
     execute: async (_id, p) => {
       // A clear phrasebook hit is the final answer; don't let the model rewrite it.
       const best = bestPhrase(p.query);
-      if (best) return { ...text(formatPhrase(best)), terminate: true };
+      if (best) return done(formatPhrase(best));
       const hits = searchPhrases(p.query);
       if (hits.length === 0) return text("句庫沒有相符的句子，請自行翻譯：附上日文、假名、羅馬拼音、中文，並使用です／ます體。");
       // Weak matches: let the model pick one or translate itself.
@@ -164,7 +166,7 @@ export function createTools(ctx: ChatContext): AgentTool<any>[] {
     executionMode: "sequential",
     execute: async (_id, p) => {
       const memo = addMemo(ctx.chatId, p.text, ctx.senderName);
-      return text(`已記下 #${memo.id}：${memo.text}`);
+      return done(`已記下 #${memo.id}：${memo.text}`);
     },
   });
 
@@ -176,7 +178,7 @@ export function createTools(ctx: ChatContext): AgentTool<any>[] {
     executionMode: "sequential",
     execute: async (_id, p) => {
       const memo = deleteMemo(ctx.chatId, p.id);
-      return text(`已刪除記事 #${memo.id}：${memo.text}`);
+      return done(`已刪除記事 #${memo.id}：${memo.text}`);
     },
   });
 
