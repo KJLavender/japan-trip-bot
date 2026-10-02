@@ -161,6 +161,8 @@ export interface AskOptions {
   systemPrompt?: string;
   /** Hide tools for this turn. */
   noTools?: boolean;
+  /** Cap output length for this turn (small models ignore "最多 12 行"). */
+  maxTokens?: number;
   /** Store this instead of the full prompt in history (keeps OCR dumps out of later context). */
   historyText?: string;
 }
@@ -186,6 +188,8 @@ export async function ask(
     s.ctx.toolsUsed = [];
     s.agent.state.systemPrompt = opts.systemPrompt ?? systemPrompt(chatId);
     const tools = s.agent.state.tools;
+    const model = s.agent.state.model;
+    if (opts.maxTokens) s.agent.state.model = { ...model, maxTokens: opts.maxTokens };
     if (opts.noTools) s.agent.state.tools = [];
     const timer = setTimeout(() => s.agent.abort(), config.llmTimeoutMs);
     try {
@@ -193,6 +197,7 @@ export async function ask(
     } finally {
       clearTimeout(timer);
       s.agent.state.tools = tools;
+      s.agent.state.model = model;
       if (opts.historyText) {
         compactLastUserMessage(s.agent, `[${senderName}] ${opts.historyText}`);
         writeJson("sessions", chatId, s.agent.state.messages);

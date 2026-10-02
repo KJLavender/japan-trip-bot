@@ -1,3 +1,5 @@
+import { existsSync, readFileSync } from "node:fs";
+
 /**
  * Hand-written travel glossary: words a translation app gets "right"
  * but that still leave a Taiwanese traveller unsure what they mean.
@@ -8,6 +10,8 @@ export interface Term {
   note?: string;
   /** Allergens this dish usually contains even when the menu doesn't say so. */
   usually?: string[];
+  /** Where an entry came from when it isn't hand-checked. */
+  source?: "wikidata" | "ai";
 }
 
 // ---- 菜單、店內用語 ----
@@ -89,6 +93,8 @@ export const FOODS: Term[] = [
   // OCR often returns 面 for 麺, so those spellings are listed too.
   { ja: ["担々麺", "坦々麺", "坦坦麺", "担担麺", "坦坦面", "担担面", "坦々面"], zh: "擔擔麵", note: "通常會辣，含芝麻", usually: ["芝麻", "小麥"] },
   { ja: ["ふかひれ", "フカヒレ", "鱶鰭"], zh: "魚翅" },
+  // Wikidata labels 白子 as 魚膘 (swim bladder), which is wrong.
+  { ja: ["白子"], zh: "白子（魚的精巢，多為鱈魚）", note: "口感綿密濃郁，冬季限定的居酒屋料理" },
   { ja: ["焼売", "焼賣", "シュウマイ", "シューマイ"], zh: "燒賣", usually: ["小麥"] },
   { ja: ["蒸し餃子", "蒸餃子"], zh: "蒸餃", usually: ["小麥"] },
   { ja: ["上海麺", "上海麵", "上海面"], zh: "上海麵（上海風味湯麵）", usually: ["小麥"] },
@@ -185,17 +191,50 @@ export const OMAMORI: Term[] = [
   { ja: ["金運"], zh: "財運" },
 ];
 
-/** All terms whose Japanese form appears in the text, longest match first, deduplicated. */
-export function findTerms(text: string, dict: Term[]): Term[] {
+const KANA_ONLY = /^[\u30a0-\u30ffー]+$|^[\u3040-\u309fー]+$/;
+const KATAKANA = /[\u30a0-\u30ffー]/;
+const HIRAGANA = /[\u3040-\u309f]/;
+
+/**
+ * Substring match, except kana-only words must not sit inside a longer word of the same script:
+ * アジ (竹筴魚) must not fire on アジア, and いくら not on いくらですか.
+ */
+function indexOfWord(text: string, w: string): number {
+  if (!KANA_ONLY.test(w)) return text.indexOf(w);
+  const script = KATAKANA.test(w[0]) ? KATAKANA : HIRAGANA;
+  for (let i = text.indexOf(w); i >= 0; i = text.indexOf(w, i + 1)) {
+    const before = text[i - 1] ?? "";
+    const after = text[i + w.length] ?? "";
+    if (!script.test(before) && !script.test(after)) return i;
+  }
+  return -1;
+}
+
+const sortedCache = new WeakMap<Term[], Term[]>();
+const longestFirst = (dict: Term[]) => {
+  let sorted = sortedCache.get(dict);
+  if (!sorted) {
+    sorted = [...dict].sort((a, b) => Math.max(...b.ja.map((s) => s.length)) - Math.max(...a.ja.map((s) => s.length)));
+    sortedCache.set(dict, sorted);
+  }
+  return sorted;
+};
+
+/**
+ * All terms whose Japanese form appears in the text, longest match first, deduplicated.
+ * Dictionaries are tried in priority order: hand-checked entries win over Wikidata.
+ */
+export function findTerms(text: string, ...dicts: Term[][]): Term[] {
   const found: Term[] = [];
-  const sorted = [...dict].sort((a, b) => Math.max(...b.ja.map((s) => s.length)) - Math.max(...a.ja.map((s) => s.length)));
   let rest = text;
-  for (const t of sorted) {
-    const hit = t.ja.find((w) => rest.includes(w));
-    if (hit) {
-      found.push(t);
-      // Consume the match so 焼きそば doesn't also count as そば.
-      rest = rest.split(hit).join("　");
+  for (const dict of dicts) {
+    for (const t of longestFirst(dict)) {
+      const hit = t.ja.find((w) => indexOfWord(rest, w) >= 0);
+      if (hit) {
+        found.push(t);
+        // Consume the match so 焼きそば doesn't also count as そば.
+        rest = rest.split(hit).join("　");
+      }
     }
   }
   return found;
@@ -220,3 +259,13 @@ export const PRODUCT_TERMS: Term[] = [
   { ja: ["敏感肌"], zh: "敏感肌適用" },
   { ja: ["無香料"], zh: "無香料" },
 ];
+
+// ---- Wikidata 料理辭典（CC0，scripts/build-wikidata-dict.ts 產生）----
+function loadWikidata(): Term[] {
+  // Next to this file in src/ (tsx) or dist/ (compiled; the Dockerfile copies it over).
+  const file = new URL("./wikidata-foods.json", import.meta.url);
+  if (!existsSync(file)) return [];
+  const { entries } = JSON.parse(readFileSync(file, "utf8")) as { entries: { ja: string[]; zh: string }[] };
+  return entries.map((e) => ({ ja: e.ja, zh: e.zh, source: "wikidata" as const }));
+}
+export const WIKI_FOODS: Term[] = loadWikidata();

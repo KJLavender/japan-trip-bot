@@ -33,6 +33,11 @@ export const config = {
   // How long a group photo stays available for "@小幫手 翻譯這張".
   imageWindowMs: Number(process.env.IMAGE_WINDOW_MINUTES ?? 15) * 60 * 1000,
   maxInputChars: 1000,
+  // Optional dictionary fallback for words no local dictionary knows. Sends only OCR text
+  // fragments (never photos or chat) to Google; on the free tier Google may use them.
+  geminiApiKey: process.env.GEMINI_API_KEY ?? "",
+  geminiModel: process.env.GEMINI_MODEL ?? "gemini-2.5-flash",
+  geminiDailyLimit: Number(process.env.GEMINI_DAILY_LIMIT ?? 300),
   // If a slow reply misses the reply token, fall back to push (uses monthly quota).
   allowPushFallback: process.env.ALLOW_PUSH_FALLBACK === "true",
 };

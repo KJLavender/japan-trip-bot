@@ -10,12 +10,15 @@ import { config, ollamaApiBase } from "../src/config.js";
 import { ocrImage } from "../src/ocr.js";
 import { analyzeText, buildPrompt, explainPhoto, toVisionImage } from "../src/photo.js";
 
-interface Case { file: string; url: string; question: string; expect: string[]; reject?: string[]; scene: string }
-const { cases } = JSON.parse(readFileSync("test/photo-cases.json", "utf8")) as { cases: Case[] };
+interface Case { file: string; url: string; question: string; expect: string[]; reject?: string[]; scene: string; set?: string }
+const all = (JSON.parse(readFileSync("test/photo-cases.json", "utf8")) as { cases: Case[] }).cases;
 const args = process.argv.slice(2);
 const runs = Number(args.find((a) => a.startsWith("--runs="))?.split("=")[1] ?? 2);
 const numCtx = Number(args.find((a) => a.startsWith("--ctx="))?.split("=")[1] ?? config.ollamaNumCtx);
 const skipPipeline = args.includes("--skip-pipeline");
+// --set=dev|holdout: holdout photos were never used for tuning, so their score is the honest one.
+const set = args.find((a) => a.startsWith("--set="))?.split("=")[1];
+const cases = set ? all.filter((c) => (c.set ?? "dev") === set) : all;
 const models = args.filter((a) => !a.startsWith("--"));
 const botOnly = args.includes("--bot-only");
 if (!botOnly && models.length === 0) models.push("qwen3.5:4b");

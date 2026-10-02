@@ -11,7 +11,8 @@
     "build": "tsc -p tsconfig.build.json",
     "backup": "tsx scripts/backup.ts",
     "eval": "tsx scripts/eval.ts",
-    "eval:photos": "tsx scripts/eval-photos.ts"
+    "eval:photos": "tsx scripts/eval-photos.ts",
+    "build:dict": "tsx scripts/build-wikidata-dict.ts"
   },
   "keywords": [],
   "author": "",
@@ -27,6 +28,7 @@
   "devDependencies": {
     "@types/express": "^5.0.6",
     "@types/node": "^26.6.3",
+    "opencc-js": "^1.4.2",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"
   },
