@@ -196,16 +196,17 @@ const KATAKANA = /[\u30a0-\u30ffー]/;
 const HIRAGANA = /[\u3040-\u309f]/;
 
 /**
- * Substring match, except kana-only words must not sit inside a longer word of the same script:
+ * Substring match, except a kana-only word must not run on into more of the same script:
  * アジ (竹筴魚) must not fire on アジア, and いくら not on いくらですか.
  */
 function indexOfWord(text: string, w: string): number {
   if (!KANA_ONLY.test(w)) return text.indexOf(w);
   const script = KATAKANA.test(w[0]) ? KATAKANA : HIRAGANA;
   for (let i = text.indexOf(w); i >= 0; i = text.indexOf(w, i + 1)) {
-    const before = text[i - 1] ?? "";
+    // Compounds that END in the word are fine (ミンチカツ, エビカツ); a word that runs on
+    // into more of the same script is a different word (アジア is not アジ).
     const after = text[i + w.length] ?? "";
-    if (!script.test(before) && !script.test(after)) return i;
+    if (!script.test(after)) return i;
   }
   return -1;
 }

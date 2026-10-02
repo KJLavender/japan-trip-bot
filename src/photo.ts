@@ -149,7 +149,9 @@ const KIND_PROMPT: Record<PhotoKind, string> = {
     "最後用一句話推薦第一次來的人可以點什麼（優先參考「おすすめ」或招牌）。",
   drug:
     "這是藥品包裝或說明書。依序說明：這是什麼藥（用途）、主要成分（文字有寫才寫）、注意事項。" +
-    "用法用量以上方程式擷取的為準，不要自己改。不確定的就不要寫。",
+    "用法用量以上方程式擷取的為準，不要自己改。" +
+    "藥名和用途只能根據照片上的文字或 <facts>；兩者都沒有，就說「無法確認這是什麼藥，請拿給藥師看」。" +
+    "絕對不要猜成分、用途、處方或管制狀態。",
   notice: "這是告示或車站公告。用兩三句話說明：在講什麼、對旅客有什麼影響、建議怎麼做。",
   shrine:
     "這是神社的籤詩或御守。如果是籤詩：先說等級的意思，再把各項（願望、待人、旅行等）用一句白話解釋。" +
@@ -217,9 +219,10 @@ export async function explainOcrText(
 ): Promise<string> {
   const hasText = text.replace(/\s/g, "").length >= 4;
   const analysis = hasText ? analyzeText(text) : emptyAnalysis();
-  // Words no local dictionary knows → Gemini (text fragments only; cached). Not for drugs:
-  // medical facts come from the label and code, never from a model.
-  if (hasText && analysis.kind !== "drug" && geminiEnabled()) {
+  // Words no local dictionary knows → Gemini (text fragments only; cached). For drugs this only
+  // identifies the product; dosage and warnings still come from the label via code. The local
+  // model guessing drug identity was worse: it called an influenza antiviral a diet drug.
+  if (hasText && geminiEnabled()) {
     const known = findTerms(text, FOODS, WIKI_FOODS, MENU_TERMS, NOTICE_TERMS, PRODUCT_TERMS);
     // Wait at most 5s; a slow lookup keeps running and lands in the cache for next time.
     const pending = lookupTerms(unknownFragments(text, known));
@@ -245,7 +248,7 @@ export async function explainOcrText(
     historyText: `（傳了一張${KIND_LABEL[analysis.kind].slice(2)}照片）${question}`,
   });
   const unverified = unverifiedPrices(explanation, text);
-  explanation = truncateLines(explanation, MAX_PHOTO_REPLY_CHARS);
+  explanation = truncateLines(dropUnsafeLines(explanation, analysis.header), MAX_PHOTO_REPLY_CHARS);
   return withHead(unverified.length ? `${explanation}\n\n${PRICE_WARNING}` : explanation);
 }
 
@@ -283,4 +286,20 @@ export function truncateLines(text: string, max: number): string {
     len += line.length + 1;
   }
   return `${kept.join("\n").trimEnd()}\n…（內容較長，想知道哪一項可以再問我）`;
+}
+
+
+/** "沒有過敏原" etc.: code not finding something doesn't mean it isn't there. */
+const ABSENCE_CLAIM = /(沒|沒有|不含|無|未含|零)\s*(過敏原|酒精|酒|藥|藥物成分|添加物)/;
+
+/** Drop absence claims, and lines that just repeat the code-generated header. */
+export function dropUnsafeLines(text: string, header: string[]): string {
+  const norm = (s: string) => s.replace(/[\s。．.、，,!！⚠️💊🍺🐟⛩️📋]/gu, "");
+  const headerSet = new Set(header.map(norm));
+  return text
+    .split("\n")
+    .filter((line) => !ABSENCE_CLAIM.test(line) && !(norm(line) && headerSet.has(norm(line))))
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
