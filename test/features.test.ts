@@ -72,3 +72,24 @@ test("stripMarkdown flattens tables, headers and bold", async () => {
   const md = "## 菜單\n| 品名 | 價格 |\n|---|---|\n| **生ビール** | 580円 |";
   assert.equal(stripMarkdown(md), "菜單\n品名｜價格\n生ビール｜580円");
 });
+
+test("writeJson is atomic and leaves no temp files", async () => {
+  const { writeJson, readJson } = await import("../src/store.js");
+  const { readdirSync } = await import("node:fs");
+  writeJson("ledgers", "atomic", { v: 1 });
+  writeJson("ledgers", "atomic", { v: 2 });
+  assert.deepEqual(readJson("ledgers", "atomic", {}), { v: 2 });
+  assert.ok(readdirSync(join(dir, "ledgers")).every((f) => !f.endsWith(".tmp")));
+});
+
+test("AI offline: non-AI commands still work, AI ones get a clear message", async () => {
+  const { config } = await import("../src/config.js");
+  const original = config.ollamaBaseUrl;
+  config.ollamaBaseUrl = "http://127.0.0.1:9/v1"; // nothing listens on port 9
+  try {
+    assert.match(await handleText("g3", "小明", "記一下：測試"), /已記下/);
+    assert.match(await handleText("g3", "小明", "一蘭 5200 我付"), /AI 暫時離線/);
+  } finally {
+    config.ollamaBaseUrl = original;
+  }
+});
