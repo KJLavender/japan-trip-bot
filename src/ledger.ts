@@ -16,6 +16,8 @@ export interface Ledger {
   members: string[];
   expenses: Expense[];
   nextId: number;
+  /** LINE userId → name used in this ledger, so a display-name change doesn't split someone in two. */
+  users?: Record<string, string>;
 }
 
 export interface Transfer {
@@ -32,6 +34,32 @@ export function addMembers(ledger: Ledger, names: string[]) {
   for (const n of names.map((s) => s.trim()).filter(Boolean)) {
     if (!ledger.members.includes(n)) ledger.members.push(n);
   }
+}
+
+/** Rename a member everywhere in the ledger. */
+export function renameMember(ledger: Ledger, from: string, to: string) {
+  const swap = (n: string) => (n === from ? to : n);
+  ledger.members = [...new Set(ledger.members.map(swap))];
+  for (const e of ledger.expenses) {
+    e.payer = swap(e.payer);
+    e.participants = e.participants.map(swap);
+  }
+}
+
+/**
+ * Bind a LINE user to their ledger name and follow display-name changes.
+ * Returns the name to use for this user (disambiguated if another user already has it).
+ * Mutates the ledger; the caller saves it.
+ */
+export function syncUser(ledger: Ledger, userId: string, displayName: string): string {
+  const users = (ledger.users ??= {});
+  const takenByOther = (n: string) => Object.entries(users).some(([id, name]) => id !== userId && name === n);
+  const name = takenByOther(displayName) ? `${displayName}#${userId.slice(-4)}` : displayName;
+  const previous = users[userId];
+  if (previous && previous !== name) renameMember(ledger, previous, name);
+  users[userId] = name;
+  addMembers(ledger, [name]);
+  return name;
 }
 
 export function addExpense(

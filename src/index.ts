@@ -2,7 +2,7 @@ import express, { type ErrorRequestHandler } from "express";
 import { messagingApi, middleware, HTTPFetchError, SignatureValidationFailed, type webhook } from "@line/bot-sdk";
 import type { ImageContent } from "@mariozechner/pi-ai";
 import { config } from "./config.js";
-import { handleText } from "./handler.js";
+import { handleText, HELP, type Sender } from "./handler.js";
 import { checkModel } from "./llm-health.js";
 
 if (!config.lineChannelSecret || !config.lineAccessToken) {
@@ -12,26 +12,29 @@ if (!config.lineChannelSecret || !config.lineAccessToken) {
 
 const client = new messagingApi.MessagingApiClient({ channelAccessToken: config.lineAccessToken });
 const blobClient = new messagingApi.MessagingApiBlobClient({ channelAccessToken: config.lineAccessToken });
-const nameCache = new Map<string, string>();
+// Short TTL so display-name changes reach the ledger (see syncUser).
+const NAME_TTL_MS = 10 * 60 * 1000;
+const nameCache = new Map<string, { name: string; at: number }>();
 
 const chatIdOf = (source: webhook.Source) =>
   source.type === "group" ? source.groupId : source.type === "room" ? source.roomId : source.userId!;
 
-async function senderName(source: webhook.Source): Promise<string> {
+async function senderOf(source: webhook.Source): Promise<Sender> {
   const userId = source.userId;
-  if (!userId) return "某人";
+  if (!userId) return { name: "某人" };
   const key = `${chatIdOf(source)}:${userId}`;
   const cached = nameCache.get(key);
-  if (cached) return cached;
+  if (cached && Date.now() - cached.at < NAME_TTL_MS) return { id: userId, name: cached.name };
   try {
     const profile =
       source.type === "group" ? await client.getGroupMemberProfile(source.groupId, userId)
       : source.type === "room" ? await client.getRoomMemberProfile(source.roomId, userId)
       : await client.getProfile(userId);
-    nameCache.set(key, profile.displayName);
-    return profile.displayName;
+    nameCache.set(key, { name: profile.displayName, at: Date.now() });
+    return { id: userId, name: profile.displayName };
   } catch {
-    return "某人";
+    // Keep using the last known name rather than splitting the user into "某人".
+    return { id: userId, name: cached?.name ?? "某人" };
   }
 }
 
@@ -110,6 +113,15 @@ async function reply(replyToken: string, to: string, text: string) {
 }
 
 async function handleEvent(event: webhook.Event) {
+  if (event.type === "join" && event.replyToken) {
+    // Replies are free; introduce ourselves once when invited to a group.
+    return reply(event.replyToken, chatIdOf(event.source!), `大家好，我是${config.botName} 🗾 旅途中的分帳、日文、記事和拍照翻譯交給我！\n\n${HELP}`);
+  }
+  if (event.type === "leave") {
+    // Data is kept: re-inviting the bot to the same group resumes the same ledger.
+    console.log(`[line] removed from ${event.source?.type}`);
+    return;
+  }
   if (event.type !== "message" || !event.replyToken || !event.source) return;
   const source = event.source;
   const chatId = chatIdOf(source);
@@ -123,7 +135,7 @@ async function handleEvent(event: webhook.Event) {
     // 1:1 chat: translate right away.
     client.showLoadingAnimation({ chatId, loadingSeconds: 60 }).catch(() => {});
     const image = await downloadImage(event.message.id);
-    const answer = await handleText(chatId, await senderName(source), "請翻譯並解釋這張照片", [image]);
+    const answer = await handleText(chatId, await senderOf(source), "請翻譯並解釋這張照片", [image]);
     return reply(event.replyToken, chatId, answer);
   }
 
@@ -145,9 +157,9 @@ async function handleEvent(event: webhook.Event) {
     }
   }
 
-  const name = await senderName(source);
+  const sender = await senderOf(source);
   const prompt = text || (images.length ? "請翻譯並解釋這張照片" : "說明");
-  return reply(event.replyToken, chatId, await handleText(chatId, name, prompt, images));
+  return reply(event.replyToken, chatId, await handleText(chatId, sender, prompt, images));
 }
 
 const app = express();
