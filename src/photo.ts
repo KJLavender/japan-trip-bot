@@ -221,7 +221,9 @@ export async function explainOcrText(
   // medical facts come from the label and code, never from a model.
   if (hasText && analysis.kind !== "drug" && geminiEnabled()) {
     const known = findTerms(text, FOODS, WIKI_FOODS, MENU_TERMS, NOTICE_TERMS, PRODUCT_TERMS);
-    const looked = await lookupTerms(unknownFragments(text, known));
+    // Wait at most 5s; a slow lookup keeps running and lands in the cache for next time.
+    const pending = lookupTerms(unknownFragments(text, known));
+    const looked = await Promise.race([pending, new Promise<never[]>((r) => setTimeout(() => r([]), 5000))]);
     analysis.facts.push(...looked.map((t) => `${t.ja[0]}＝${t.zh}${t.note ? `（${t.note}）` : ""}〔AI 查詢〕`));
   }
   const head = hasText ? [KIND_LABEL[analysis.kind], ...analysis.header].join("\n") : "";
@@ -239,6 +241,7 @@ export async function explainOcrText(
     systemPrompt: PHOTO_SYSTEM_PROMPT,
     noTools: true,
     maxTokens: 700,
+    isolated: true,
     historyText: `（傳了一張${KIND_LABEL[analysis.kind].slice(2)}照片）${question}`,
   });
   const unverified = unverifiedPrices(explanation, text);
