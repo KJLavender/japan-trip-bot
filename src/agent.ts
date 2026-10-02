@@ -110,6 +110,7 @@ export function stripMarkdown(text: string): string {
         .replace(/^\s*\|\s*|\s*\|\s*$/g, "") // table edges
         .replace(/\s*\|\s*/g, "｜")
         .replace(/^#{1,6}\s+/, "")
+        .replace(/<br\s*\/?>/gi, "")
         .replace(/\*\*(.+?)\*\*/g, "$1"),
     )
     .join("\n");
@@ -155,7 +156,22 @@ function lastAssistantText(messages: AgentMessage[]): string {
 }
 
 /** Run one user turn. Calls in the same chat are serialized. */
-export async function ask(chatId: string, senderName: string, text: string, images: ImageContent[] = []): Promise<string> {
+export interface AskOptions {
+  /** Replace AGENTS.md for this turn (photo explanations use their own prompt). */
+  systemPrompt?: string;
+  /** Hide tools for this turn. */
+  noTools?: boolean;
+  /** Store this instead of the full prompt in history (keeps OCR dumps out of later context). */
+  historyText?: string;
+}
+
+export async function ask(
+  chatId: string,
+  senderName: string,
+  text: string,
+  images: ImageContent[] = [],
+  opts: AskOptions = {},
+): Promise<string> {
   if (!(await isLlmUp())) return LLM_OFFLINE_MESSAGE;
   const s = getSession(chatId);
   // One Ollama serves every group, so cap the total backlog as well as per-chat.
@@ -168,12 +184,19 @@ export async function ask(chatId: string, senderName: string, text: string, imag
     s.ctx.senderName = senderName;
     s.ctx.userText = text;
     s.ctx.toolsUsed = [];
-    s.agent.state.systemPrompt = systemPrompt(chatId);
+    s.agent.state.systemPrompt = opts.systemPrompt ?? systemPrompt(chatId);
+    const tools = s.agent.state.tools;
+    if (opts.noTools) s.agent.state.tools = [];
     const timer = setTimeout(() => s.agent.abort(), config.llmTimeoutMs);
     try {
       await s.agent.prompt(`[${senderName}] ${text}`, images);
     } finally {
       clearTimeout(timer);
+      s.agent.state.tools = tools;
+      if (opts.historyText) {
+        compactLastUserMessage(s.agent, `[${senderName}] ${opts.historyText}`);
+        writeJson("sessions", chatId, s.agent.state.messages);
+      }
     }
     if (s.agent.state.errorMessage) {
       console.error(`[agent] error:`, s.agent.state.errorMessage);
@@ -198,6 +221,17 @@ export async function ask(chatId: string, senderName: string, text: string, imag
     globalPending--;
   });
   return run;
+}
+
+/** Swap the latest user message's content for a short summary (images are stripped separately). */
+function compactLastUserMessage(agent: Agent, summary: string) {
+  const msgs = agent.state.messages;
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    if (msgs[i].role === "user") {
+      msgs[i] = { ...msgs[i], content: summary } as AgentMessage;
+      return;
+    }
+  }
 }
 
 /** End the trip: archive the conversation and drop the in-memory session. */

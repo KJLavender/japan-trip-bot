@@ -16,3 +16,5 @@ Thumbs.db
 # OCR 的 Python 虛擬環境
 ocr/.venv/
 __pycache__/
+# 本機評測用的照片（第三方授權，不上傳）
+test/photos/
