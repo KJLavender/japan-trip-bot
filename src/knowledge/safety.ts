@@ -75,11 +75,12 @@ export const detectDrugWarnings = (text: string) => scan(text, DRUG);
 /** Japanese OTC drug class (第1類 = strongest, needs a pharmacist). */
 export function drugClass(text: string): string | undefined {
   if (/要指導医薬品/.test(text)) return "要指導醫藥品：必須由藥師當面說明才能購買";
-  if (/第\s*1\s*類医薬品/.test(text)) return "第 1 類醫藥品：風險最高，需藥師說明";
-  if (/指定第\s*2\s*類医薬品/.test(text)) return "指定第 2 類醫藥品：需特別注意的成分，建議詢問藥師";
-  if (/第\s*2\s*類医薬品/.test(text)) return "第 2 類醫藥品：一般感冒藥、止痛藥等級";
-  if (/第\s*3\s*類医薬品/.test(text)) return "第 3 類醫藥品：風險較低（維他命、整腸劑等）";
-  return undefined;
+  // Tolerant of OCR misreads such as 第2题医葡品.
+  const m = text.match(/(指定)?第\s*([123])\s*[類类題题]\s*医?.?品/);
+  if (!m) return undefined;
+  if (m[2] === "1") return "第 1 類醫藥品：風險最高，需藥師說明";
+  if (m[2] === "2") return m[1] ? "指定第 2 類醫藥品：需特別注意的成分，建議詢問藥師" : "第 2 類醫藥品：一般感冒藥、止痛藥、胃腸藥等級";
+  return "第 3 類醫藥品：風險較低（維他命、整腸劑等）";
 }
 
 /** Pull dosage facts like 1日3回 / 1回2錠 / 食後 straight from the label. */

@@ -59,3 +59,28 @@ test("pickImage: quoted > own fresh photo > hint wording", () => {
   assert.equal(pickImage(imgs, { text: "這啥" }, "U1", now)?.messageId, "a"); // hint → own latest
   assert.equal(pickImage(imgs, { text: "這啥" }, "U9", now)?.messageId, "b"); // hint → group latest
 });
+
+test("OCR misreads: simplified kanji are mapped back, drug class tolerates 第2题医葡品", async () => {
+  const { normalizeOcr } = await import("../src/photo.js");
+  const { drugClass } = await import("../src/knowledge/safety.js");
+  assert.equal(normalizeOcr("胃肠药 细粒 饺子"), "胃腸薬 細粒 餃子");
+  assert.equal(normalizeOcr("１日３回"), "1日3回");
+  assert.match(drugClass(normalizeOcr("第2题医葡品")) ?? "", /第 2 類/);
+  assert.match(drugClass("指定第2類医薬品") ?? "", /指定第 2 類/);
+  assert.equal(drugClass("第2回 大会"), undefined);
+});
+
+test("real-photo regressions: order sheets are menus, prose with 🗣 isn't a phrase card", async () => {
+  const { hasUnverifiedPhrase } = await import("../src/phrases.js");
+  assert.equal(classify("お好みにぎり 注文票\nワサビ ありなし\nまぐろ\n※スタッフにご注文ください。お願いします。"), "menu");
+  assert.equal(hasUnverifiedPhrase("🗣️ 這是什麼？這是神社的石燈籠"), false);
+  assert.equal(hasUnverifiedPhrase("🇯🇵 近くにロッカーはありますか\n🔤 ちかくに\n🗣 chikaku ni"), true);
+  const names = findTerms("坦坦面 上海面 ふかひれ姿面 焼売 海老蒸餃子", FOODS).map((t) => t.zh);
+  for (const n of ["擔擔麵", "魚翅", "燒賣", "蒸餃", "蝦"]) assert.ok(names.some((x) => x.includes(n)), n);
+});
+
+test("prices the model invents are flagged; prices from the photo are not", async () => {
+  const { unverifiedPrices } = await import("../src/photo.js");
+  assert.deepEqual(unverifiedPrices("上海麺 580円（≈ NT$117）、焼餃子 180円", "上海麺\n焼餃子"), [580, 180]);
+  assert.deepEqual(unverifiedPrices("冷奴 180円、生ビール ¥1,200", "冷奴180円\n生ビール 1,200円"), []);
+});

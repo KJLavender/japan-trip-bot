@@ -1,0 +1,118 @@
+{
+  "_comment": "Real-world photo eval set. Images are NOT redistributed: `npm run eval:photos` downloads them from the original source into test/photos/ (gitignored). `expect` = regexes the explanation must all match; `reject` = must not match.",
+  "cases": [
+    {
+      "file": "menu-handwritten.jpg",
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Izakaya_menu_(55081191655).jpg?width=1600",
+      "source": "https://commons.wikimedia.org/wiki/File:Izakaya_menu_(55081191655).jpg",
+      "license": "CC BY 4.0 — Ryohei Noda",
+      "scene": "居酒屋手寫白板菜單，價格用漢字數字",
+      "question": "這啥",
+      "expect": [
+        "生魚片|刺身|鮪魚|鮪",
+        "推薦|今晚|今日|今宵"
+      ]
+    },
+    {
+      "file": "menu-sushi-order.jpg",
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/JP_%E6%97%A5%E6%9C%AC_Japan_%E6%B2%96%E7%B9%A9_OKINAWA_%E9%82%A3%E9%9C%B8_Naha_%E9%AD%9A%E5%B1%8B%E6%B5%B7%E9%AE%AE_Izakaya_%E5%B1%85%E9%85%92%E5%B1%8B%E9%A3%9F%E5%A0%82_Japanese_seafood_restaurant_menu_February_2026_N13P_01.jpg?width=1600",
+      "source": "https://commons.wikimedia.org/wiki/File:JP_%E6%97%A5%E6%9C%AC_Japan_%E6%B2%96%E7%B9%A9_OKINAWA_%E9%82%A3%E9%9C%B8_Naha_%E9%AD%9A%E5%B1%8B%E6%B5%B7%E9%AE%AE_Izakaya_%E5%B1%85%E9%85%92%E5%B1%8B%E9%A3%9F%E5%A0%82_Japanese_seafood_restaurant_menu_February_2026_N13P_01.jpg",
+      "license": "CC0 — NORTLAUKAU",
+      "scene": "壽司點餐單，要勾選要不要芥末",
+      "question": "這要怎麼填",
+      "expect": [
+        "壽司|握壽司",
+        "芥末|山葵|哇沙米|ワサビ",
+        "鮪|まぐろ|マグロ"
+      ]
+    },
+    {
+      "file": "menu-glare.jpg",
+      "url": "https://live.staticflickr.com/3407/3637642281_f5d3c23a2d_b.jpg",
+      "source": "https://www.flickr.com/photo.gne?id=3637642281",
+      "license": "CC BY-SA 2.0",
+      "scene": "連鎖中華料理店菜單，有反光、斜拍、解析度低",
+      "question": "",
+      "expect": [
+        "炸雞|唐揚",
+        "毛豆|枝豆|蠶豆|そら豆",
+        "豆腐|冷奴",
+        "啤酒"
+      ]
+    },
+    {
+      "file": "menu-wall-vertical.jpg",
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Wall_menu_(3052448204).jpg?width=1600",
+      "source": "https://commons.wikimedia.org/wiki/File:Wall_menu_(3052448204).jpg",
+      "license": "CC BY 2.0 — Kim Ahlström",
+      "scene": "外牆上直書的菜名",
+      "question": "這家賣什麼",
+      "expect": [
+        "擔擔|担担|坦坦|担々|擔々",
+        "餃子|煎餃|蒸餃",
+        "燒賣|烧卖|焼売|燒売"
+      ],
+      "reject": [
+        "天鵝"
+      ]
+    },
+    {
+      "file": "ticket-machine.jpg",
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Ticket_Vendor,_ramen_shop,_Tokyo,_Japan_2020-01-10.jpg?width=1600",
+      "source": "https://commons.wikimedia.org/wiki/File:Ticket_Vendor,_ramen_shop,_Tokyo,_Japan_2020-01-10.jpg",
+      "license": "CC BY-SA 2.0 — Nikos Roussos",
+      "scene": "拉麵店食券機",
+      "question": "這要怎麼用",
+      "expect": [
+        "食券|餐券|售票|券|投幣|按鈕|買票",
+        "拉麵|らーめん|ラーメン|麵"
+      ]
+    },
+    {
+      "file": "drugstore-shelf.jpg",
+      "url": "https://live.staticflickr.com/5472/10752629875_6785e4ce84_b.jpg",
+      "source": "https://www.flickr.com/photo.gne?id=10752629875",
+      "license": "CC BY-NC 2.0",
+      "scene": "藥妝店胃腸藥貨架，第2類医薬品",
+      "question": "這些是什麼藥",
+      "expect": [
+        "胃|腸"
+      ]
+    },
+    {
+      "file": "notice-monorail.jpg",
+      "url": "https://live.staticflickr.com/4049/4592529476_6b03722458_b.jpg",
+      "source": "https://www.flickr.com/photo.gne?id=4592529476",
+      "license": "CC BY-NC-SA 2.0",
+      "scene": "東京單軌電車運休告示（車站閘門前）",
+      "question": "這寫什麼",
+      "expect": [
+        "停駛|停運|運休|停止|暫停|停開|不開|休",
+        "單軌|モノレール|monorail|Monorail"
+      ]
+    },
+    {
+      "file": "no-text-kaiseki.jpg",
+      "url": "https://live.staticflickr.com/3184/2992479510_871bc28528_b.jpg",
+      "source": "https://www.flickr.com/photo.gne?id=2992479510",
+      "license": "CC BY 2.0",
+      "scene": "旅館的會席料理托盤，沒有文字",
+      "question": "這是什麼",
+      "expect": [
+        "會席|懷石|会席|懐石|日式料理|日本料理|套餐|定食|料理"
+      ]
+    },
+    {
+      "file": "no-text-shrine.jpg",
+      "url": "https://live.staticflickr.com/8406/8691153059_9e8fd0aa31_b.jpg",
+      "source": "https://www.flickr.com/photo.gne?id=8691153059",
+      "license": "CC BY 2.0",
+      "scene": "神社裡綁成一排的籤和石燈籠，沒有可讀文字",
+      "question": "這是什麼",
+      "expect": [
+        "籤|おみくじ|御神籤|神籤",
+        "燈籠|灯籠|石燈|燈"
+      ]
+    }
+  ]
+}

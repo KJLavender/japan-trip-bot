@@ -10,7 +10,8 @@
     "setup:model": "tsx scripts/setup-model.ts",
     "build": "tsc -p tsconfig.build.json",
     "backup": "tsx scripts/backup.ts",
-    "eval": "tsx scripts/eval.ts"
+    "eval": "tsx scripts/eval.ts",
+    "eval:photos": "tsx scripts/eval-photos.ts"
   },
   "keywords": [],
   "author": "",
