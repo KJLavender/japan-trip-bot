@@ -19,7 +19,8 @@
     "@line/bot-sdk": "^11.3.0",
     "@mariozechner/pi-agent-core": "^0.73.1",
     "@mariozechner/pi-ai": "^0.73.1",
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "sharp": "^0.35.5"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
