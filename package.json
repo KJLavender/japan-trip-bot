@@ -1,0 +1,35 @@
+{
+  "name": "japan-trip-bot",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "test": "tsx --test test/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "chat": "tsx scripts/chat.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "description": "LINE 日本旅遊群組小幫手：日圓分帳、救急日文、行程記事、拍照翻譯（Pi agent + Ollama）",
+  "dependencies": {
+    "@line/bot-sdk": "^11.3.0",
+    "@mariozechner/pi-agent-core": "^0.73.1",
+    "@mariozechner/pi-ai": "^0.73.1",
+    "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.6.3",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  },
+  "type": "module",
+  "private": true,
+  "overrides": {
+    "basic-ftp": "^6.2.1"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

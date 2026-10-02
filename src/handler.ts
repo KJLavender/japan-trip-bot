@@ -1,0 +1,130 @@
+import type { ImageContent } from "@mariozechner/pi-ai";
+import { ask, archiveSession } from "./agent.js";
+import { getJpyTwd, fmtJpy, fmtTwd } from "./fx.js";
+import {
+  loadLedger, saveLedger, addMembers, removeExpense, archiveLedger,
+  formatExpenses, formatSettlement,
+} from "./ledger.js";
+import { addMemo, deleteMemo, archiveMemos, formatMemos } from "./memo.js";
+import { bestPhrase, formatPhrase } from "./phrases.js";
+import { config } from "./config.js";
+
+const HELP = `🗾 ${config.botName} 使用說明
+・記帳：@${config.botName} 一蘭 ¥5200 我付，四人分
+・成員：成員 小明 小華 阿珍 阿凱
+・帳目：列出所有帳目
+・結算：算出誰要轉給誰
+・刪除 #3：刪掉記錯的帳
+・匯率 / 匯率 3000：日圓台幣換算
+・救急日文：怎麼說「可以刷卡嗎」
+・記事：記一下：飯店是 xxx／記事／刪除記事 #2
+・行程問答：明天幾點集合？（根據記事回答）
+・拍照翻譯：先傳照片，再回覆（引用）那張照片並 @${config.botName} 翻譯
+・新旅程：封存本趟帳目、記事與對話，重新開始`;
+
+const errorText = (err: unknown) => (err as Error).message;
+
+/**
+ * Deterministic commands skip the LLM: faster, free of hallucination,
+ * and they fit within LINE's reply-token window.
+ */
+async function fastPath(chatId: string, senderName: string, text: string): Promise<string | undefined> {
+  const t = text.trim();
+  if (/^(說明|help|指令)$/i.test(t)) return HELP;
+
+  // 分帳
+  if (/^(結算|結帳|算帳)$/.test(t)) {
+    const fx = await getJpyTwd();
+    return formatSettlement(loadLedger(chatId), fx.jpyToTwd, fx.source);
+  }
+  if (/^(帳目|明細|記帳紀錄)$/.test(t)) {
+    return formatExpenses(loadLedger(chatId), (await getJpyTwd()).jpyToTwd);
+  }
+  const del = t.match(/^刪除\s*#?(\d+)$/);
+  if (del) {
+    const ledger = loadLedger(chatId);
+    try {
+      const e = removeExpense(ledger, Number(del[1]));
+      saveLedger(chatId, ledger);
+      return `已刪除 #${e.id} ${e.description} ${fmtJpy(e.amountJpy)}`;
+    } catch (err) {
+      return errorText(err);
+    }
+  }
+  const members = t.match(/^成員[:：\s]\s*(.+)$/);
+  if (members) {
+    const ledger = loadLedger(chatId);
+    addMembers(ledger, members[1].split(/[\s,，、]+/));
+    saveLedger(chatId, ledger);
+    return `目前成員（${ledger.members.length} 位）：${ledger.members.join("、")}`;
+  }
+  if (t === "成員") {
+    const { members: m } = loadLedger(chatId);
+    return m.length ? `目前成員（${m.length} 位）：${m.join("、")}` : "還沒有登記成員，用「成員 小明 小華」登記。";
+  }
+  const fx = t.match(/^匯率\s*(?:[¥￥]?\s*([\d,]+)\s*(円|日圓|日幣|JPY)?)?$/i);
+  if (fx) {
+    const rate = await getJpyTwd();
+    const head = `💱 1 JPY = ${rate.jpyToTwd.toFixed(4)} TWD（${rate.source}）`;
+    if (!fx[1]) return head;
+    const jpy = Number(fx[1].replace(/,/g, ""));
+    return `${head}\n${fmtJpy(jpy)} ≈ ${fmtTwd(jpy * rate.jpyToTwd)}`;
+  }
+
+  // 行程記事
+  const memo = t.match(/^(?:記一下|記住|筆記)[:：\s]\s*([\s\S]+)$/);
+  if (memo) {
+    try {
+      const m = addMemo(chatId, memo[1], senderName);
+      return `📒 已記下 #${m.id}：${m.text}`;
+    } catch (err) {
+      return errorText(err);
+    }
+  }
+  if (/^(記事|行程記事|備忘錄)$/.test(t)) return formatMemos(chatId);
+  const delMemo = t.match(/^刪除記事\s*#?(\d+)$/);
+  if (delMemo) {
+    try {
+      const m = deleteMemo(chatId, Number(delMemo[1]));
+      return `已刪除記事 #${m.id}：${m.text}`;
+    } catch (err) {
+      return errorText(err);
+    }
+  }
+
+  // 救急日文：句庫有明確相符的句子才走 fast path，其餘交給 agent
+  if (/怎麼說|怎麼講|怎麼問|日文|跟店員說/.test(t)) {
+    const quoted = t.match(/[「『"“](.+?)[」』"”]/)?.[1];
+    const p = bestPhrase(quoted ?? t);
+    if (p) return formatPhrase(p);
+  }
+
+  if (/^(新旅程|封存)$/.test(t)) {
+    archiveLedger(chatId);
+    archiveMemos(chatId);
+    archiveSession(chatId);
+    return "已封存本趟旅程的帳目、記事與對話 🧳 下次旅行再見！";
+  }
+  return undefined;
+}
+
+export async function handleText(
+  chatId: string,
+  senderName: string,
+  text: string,
+  images: ImageContent[] = [],
+): Promise<string> {
+  if (text.length > config.maxInputChars) return `訊息太長了（上限 ${config.maxInputChars} 字），請分段再問 🙏`;
+  if (senderName) {
+    const ledger = loadLedger(chatId);
+    if (!ledger.members.includes(senderName)) {
+      addMembers(ledger, [senderName]);
+      saveLedger(chatId, ledger);
+    }
+  }
+  if (images.length === 0) {
+    const fast = await fastPath(chatId, senderName, text);
+    if (fast !== undefined) return fast;
+  }
+  return ask(chatId, senderName, text, images);
+}
