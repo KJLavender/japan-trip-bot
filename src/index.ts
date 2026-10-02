@@ -1,8 +1,8 @@
 import express, { type ErrorRequestHandler } from "express";
 import { messagingApi, middleware, HTTPFetchError, SignatureValidationFailed, type webhook } from "@line/bot-sdk";
-import type { ImageContent } from "@mariozechner/pi-ai";
 import { config } from "./config.js";
-import { handleText, HELP, type Sender } from "./handler.js";
+import { handleText, resolveSender, HELP, type Sender } from "./handler.js";
+import { explainPhoto, pickImage, type RecentImage } from "./photo.js";
 import { checkModel } from "./llm-health.js";
 
 if (!config.lineChannelSecret || !config.lineAccessToken) {
@@ -38,11 +38,10 @@ async function senderOf(source: webhook.Source): Promise<Sender> {
   }
 }
 
-// ---- 拍照翻譯：記住群組最近的照片，等有人 @小幫手 時再處理 ----
+// ---- 拍照解說：記住群組最近的照片，等有人 @小幫手 時再處理 ----
 
-interface RecentImage { messageId: string; userId?: string; at: number }
 const recentImages = new Map<string, RecentImage[]>();
-const IMAGE_HINT = /翻譯|這張|照片|圖片|菜單|看看|看一下|寫什麼|是什麼|說明書/;
+const photosEnabled = () => Boolean(config.ocrUrl) || config.visionEnabled;
 
 function rememberImage(chatId: string, img: RecentImage) {
   const now = Date.now();
@@ -51,19 +50,7 @@ function rememberImage(chatId: string, img: RecentImage) {
   recentImages.set(chatId, list.slice(-10));
 }
 
-/** Prefer the quoted photo; otherwise the sender's latest photo if the text sounds like it's about one. */
-function pickImage(chatId: string, msg: webhook.TextMessageContent, userId?: string): RecentImage | undefined {
-  const now = Date.now();
-  const list = (recentImages.get(chatId) ?? []).filter((i) => now - i.at < config.imageWindowMs);
-  if (msg.quotedMessageId) {
-    const quoted = list.find((i) => i.messageId === msg.quotedMessageId);
-    if (quoted) return quoted;
-  }
-  if (!IMAGE_HINT.test(msg.text)) return undefined;
-  return list.filter((i) => i.userId === userId).at(-1) ?? list.at(-1);
-}
-
-async function downloadImage(messageId: string): Promise<ImageContent> {
+async function downloadImage(messageId: string): Promise<Buffer> {
   const stream = await blobClient.getMessageContent(messageId);
   const chunks: Buffer[] = [];
   let size = 0;
@@ -75,9 +62,19 @@ async function downloadImage(messageId: string): Promise<ImageContent> {
     }
     chunks.push(chunk as Buffer);
   }
-  const buf = Buffer.concat(chunks);
-  const mimeType = buf.subarray(0, 4).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47])) ? "image/png" : "image/jpeg";
-  return { type: "image", data: buf.toString("base64"), mimeType };
+  return Buffer.concat(chunks);
+}
+
+async function photoReply(chatId: string, source: webhook.Source, messageId: string, question: string): Promise<string> {
+  let buf: Buffer;
+  try {
+    buf = await downloadImage(messageId);
+  } catch (err) {
+    console.warn("[image] download failed:", (err as Error).message);
+    return "照片讀取失敗（可能太大或已過期），請重新傳一次 🙏";
+  }
+  const name = resolveSender(chatId, await senderOf(source));
+  return explainPhoto(chatId, name, buf, question);
 }
 
 // ---- 訊息處理 ----
@@ -127,16 +124,14 @@ async function handleEvent(event: webhook.Event) {
   const chatId = chatIdOf(source);
 
   if (event.message.type === "image") {
-    if (!config.visionEnabled) return;
+    if (!photosEnabled()) return;
     if (source.type !== "user") {
       rememberImage(chatId, { messageId: event.message.id, userId: source.userId, at: Date.now() });
       return;
     }
-    // 1:1 chat: translate right away.
+    // 1:1 chat: explain right away.
     client.showLoadingAnimation({ chatId, loadingSeconds: 60 }).catch(() => {});
-    const image = await downloadImage(event.message.id);
-    const answer = await handleText(chatId, await senderOf(source), "請翻譯並解釋這張照片", [image]);
-    return reply(event.replyToken, chatId, answer);
+    return reply(event.replyToken, chatId, await photoReply(chatId, source, event.message.id, ""));
   }
 
   if (event.message.type !== "text") return;
@@ -146,20 +141,14 @@ async function handleEvent(event: webhook.Event) {
 
   if (source.type === "user") client.showLoadingAnimation({ chatId, loadingSeconds: 60 }).catch(() => {});
 
-  const images: ImageContent[] = [];
-  const picked = config.visionEnabled ? pickImage(chatId, msg, source.userId) : undefined;
+  const picked = photosEnabled() ? pickImage(recentImages.get(chatId) ?? [], msg, source.userId) : undefined;
   if (picked) {
-    try {
-      images.push(await downloadImage(picked.messageId));
-    } catch (err) {
-      console.warn("[image] download failed:", (err as Error).message);
-      return reply(event.replyToken, chatId, "照片讀取失敗（可能太大或已過期），請重新傳一次 🙏");
-    }
+    // Answered once; the next mention should not pick the same photo up again.
+    recentImages.set(chatId, (recentImages.get(chatId) ?? []).filter((i) => i !== picked));
+    return reply(event.replyToken, chatId, await photoReply(chatId, source, picked.messageId, text));
   }
 
-  const sender = await senderOf(source);
-  const prompt = text || (images.length ? "請翻譯並解釋這張照片" : "說明");
-  return reply(event.replyToken, chatId, await handleText(chatId, sender, prompt, images));
+  return reply(event.replyToken, chatId, await handleText(chatId, await senderOf(source), text || "說明"));
 }
 
 const app = express();

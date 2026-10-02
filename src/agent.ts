@@ -15,12 +15,15 @@ const ollamaModel: Model<"openai-completions"> = {
   api: "openai-completions",
   provider: "ollama",
   baseUrl: config.ollamaBaseUrl,
-  reasoning: false,
+  // Thinking models (qwen3.x) reason by default through Ollama's OpenAI endpoint — thousands of
+  // hidden tokens per reply. Declaring reasoning support lets pi-ai send reasoning_effort "none".
+  reasoning: true,
+  thinkingLevelMap: { off: "none" },
   input: config.visionEnabled ? ["text", "image"] : ["text"],
   cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
   contextWindow: config.ollamaNumCtx,
   maxTokens: 2048,
-  compat: { supportsDeveloperRole: false, supportsReasoningEffort: false },
+  compat: { supportsDeveloperRole: false, supportsReasoningEffort: true },
 };
 
 interface Session {
@@ -109,7 +112,6 @@ export function stripMarkdown(text: string): string {
     .join("\n");
 }
 
-const PHOTO_WARNING = "⚠️ 看圖翻譯是 AI 判讀，僅供參考；過敏、酒精或藥品相關請再跟店員或藥師確認。";
 
 function lastAssistantText(messages: AgentMessage[]): string {
   // Terminating tools end the run on their own results; a batch may hold several.
@@ -169,7 +171,6 @@ export async function ask(chatId: string, senderName: string, text: string, imag
     let reply = lastAssistantText(s.agent.state.messages) || "（沒有回應）";
     reply = annotateTwd(stripMarkdown(reply), (await getJpyTwd()).jpyToTwd);
     if (hasUnverifiedPhrase(reply)) reply += `\n\n${AI_TRANSLATION_WARNING}`;
-    if (images.length) reply += `\n\n${PHOTO_WARNING}`;
     return reply;
   });
   s.queue = run.catch(() => {}).finally(() => {

@@ -114,6 +114,17 @@ export interface Sender {
   name: string;
 }
 
+/** Register the sender as a trip member (following LINE renames) and return their ledger name. */
+export function resolveSender(chatId: string, sender: Sender | string): string {
+  const { id, name } = typeof sender === "string" ? { id: undefined, name: sender } : sender;
+  const ledger = loadLedger(chatId);
+  const before = JSON.stringify(ledger);
+  const senderName = id ? syncUser(ledger, id, name) : name;
+  if (!id && senderName) addMembers(ledger, [senderName]);
+  if (JSON.stringify(ledger) !== before) saveLedger(chatId, ledger);
+  return senderName;
+}
+
 export async function handleText(
   chatId: string,
   sender: Sender | string,
@@ -121,12 +132,7 @@ export async function handleText(
   images: ImageContent[] = [],
 ): Promise<string> {
   if (text.length > config.maxInputChars) return `訊息太長了（上限 ${config.maxInputChars} 字），請分段再問 🙏`;
-  const { id, name } = typeof sender === "string" ? { id: undefined, name: sender } : sender;
-  const ledger = loadLedger(chatId);
-  const before = JSON.stringify(ledger);
-  const senderName = id ? syncUser(ledger, id, name) : name;
-  if (!id && senderName) addMembers(ledger, [senderName]);
-  if (JSON.stringify(ledger) !== before) saveLedger(chatId, ledger);
+  const senderName = resolveSender(chatId, sender);
 
   if (images.length === 0) {
     const fast = await fastPath(chatId, senderName, text);

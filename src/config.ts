@@ -25,6 +25,8 @@ export const config = {
   fallbackJpyTwd: Number(process.env.FALLBACK_JPY_TWD ?? 0.21),
   // Keep only the most recent N messages in the LLM context.
   maxContextMessages: Number(process.env.MAX_CONTEXT_MESSAGES ?? 30),
+  // OCR sidecar (ocr/server.py). Empty = skip OCR and let the vision model read the photo.
+  ocrUrl: (process.env.OCR_URL ?? "http://127.0.0.1:8001").replace(/\/$/, ""),
   // Photo translation needs a vision model (qwen3.5:4b supports it).
   visionEnabled: (process.env.VISION_ENABLED ?? "true") === "true",
   maxImageBytes: Number(process.env.MAX_IMAGE_MB ?? 8) * 1024 * 1024,

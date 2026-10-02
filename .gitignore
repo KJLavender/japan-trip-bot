@@ -13,3 +13,6 @@ backups/
 *.log
 .DS_Store
 Thumbs.db
+# OCR 的 Python 虛擬環境
+ocr/.venv/
+__pycache__/

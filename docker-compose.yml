@@ -10,6 +10,7 @@ services:
     environment:
       # 預設連到宿主機上的 Ollama；用 ollama profile 時改成 http://ollama:11434/v1
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434/v1}
+      OCR_URL: http://ocr:8001
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
@@ -17,6 +18,21 @@ services:
       - "127.0.0.1:${PORT:-3000}:3000"
     volumes:
       - ./data:/app/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    depends_on:
+      - ocr
+
+  # 拍照解說用的 OCR（PP-OCRv5，CPU 即可）。不對外開 port，只有 bot 連得到
+  ocr:
+    build: ./ocr
+    image: japan-trip-bot-ocr
+    restart: unless-stopped
     read_only: true
     tmpfs:
       - /tmp
