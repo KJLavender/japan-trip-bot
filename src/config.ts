@@ -14,7 +14,12 @@ export const config = {
   lineAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN ?? "",
   botName: process.env.BOT_NAME ?? "小幫手",
   ollamaBaseUrl: process.env.OLLAMA_BASE_URL ?? "http://localhost:11434/v1",
-  ollamaModel: process.env.OLLAMA_MODEL ?? "qwen3.5:4b",
+  // The bot talks to a variant created by `npm run setup:model` from the base model.
+  ollamaModel: process.env.OLLAMA_MODEL ?? "japan-trip-bot",
+  ollamaBaseModel: process.env.OLLAMA_BASE_MODEL ?? "qwen3.5:4b",
+  ollamaNumCtx: Number(process.env.OLLAMA_NUM_CTX ?? 16384),
+  // Give up on the LLM after this long so non-AI features keep working when it's offline.
+  llmTimeoutMs: Number(process.env.LLM_TIMEOUT_SECONDS ?? 90) * 1000,
   dataDir: process.env.DATA_DIR ?? "data",
   // Used only when the FX API is unreachable.
   fallbackJpyTwd: Number(process.env.FALLBACK_JPY_TWD ?? 0.21),
@@ -29,3 +34,6 @@ export const config = {
   // If a slow reply misses the reply token, fall back to push (uses monthly quota).
   allowPushFallback: process.env.ALLOW_PUSH_FALLBACK === "true",
 };
+
+/** Native Ollama API root (OLLAMA_BASE_URL points at the OpenAI-compatible /v1). */
+export const ollamaApiBase = () => config.ollamaBaseUrl.replace(/\/v1\/?$/, "");

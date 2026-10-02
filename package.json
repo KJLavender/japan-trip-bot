@@ -6,7 +6,8 @@
     "start": "tsx src/index.ts",
     "test": "tsx --test test/*.test.ts",
     "typecheck": "tsc --noEmit",
-    "chat": "tsx scripts/chat.ts"
+    "chat": "tsx scripts/chat.ts",
+    "setup:model": "tsx scripts/setup-model.ts"
   },
   "keywords": [],
   "author": "",

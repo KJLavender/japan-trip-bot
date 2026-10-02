@@ -3,6 +3,7 @@ import { messagingApi, middleware, HTTPFetchError, SignatureValidationFailed, ty
 import type { ImageContent } from "@mariozechner/pi-ai";
 import { config } from "./config.js";
 import { handleText } from "./handler.js";
+import { checkModel } from "./llm-health.js";
 
 if (!config.lineChannelSecret || !config.lineAccessToken) {
   console.error("缺少 LINE_CHANNEL_SECRET / LINE_CHANNEL_ACCESS_TOKEN，請參考 .env.example");
@@ -171,4 +172,7 @@ const onError: ErrorRequestHandler = (err, _req, res, _next) => {
 };
 app.use(onError);
 
-app.listen(config.port, () => console.log(`🗾 japan-trip-bot listening on :${config.port}/webhook`));
+app.listen(config.port, () => {
+  console.log(`🗾 japan-trip-bot listening on :${config.port}/webhook`);
+  void checkModel();
+});

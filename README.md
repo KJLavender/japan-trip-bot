@@ -113,7 +113,10 @@ npm install
 
 ```bash
 ollama pull qwen3.5:4b
+npm run setup:model      # 建立 context 16k 的 japan-trip-bot 模型變體
 ```
+
+> 為什麼要 `setup:model`？Ollama 的 OpenAI 相容介面會忽略 context 設定，預設只有 4096 token，對話一長 system prompt（規則和記事）就會被默默截掉。bot 啟動時會檢查，沒設定好會警告。
 
 先不打開 LINE，在本機試玩看看（可以順便確認 Ollama 正常）：
 
@@ -178,7 +181,10 @@ https://xxxx.trycloudflare.com/webhook
 
 | 變數 | 預設值 | 說明 |
 |---|---|---|
-| `OLLAMA_MODEL` | `qwen3.5:4b` | 使用的模型 |
+| `OLLAMA_BASE_MODEL` | `qwen3.5:4b` | 基底模型 |
+| `OLLAMA_MODEL` | `japan-trip-bot` | bot 實際呼叫的模型（由 `setup:model` 建立） |
+| `OLLAMA_NUM_CTX` | `16384` | context 長度 |
+| `LLM_TIMEOUT_SECONDS` | `90` | AI 回應逾時 |
 | `OLLAMA_BASE_URL` | `http://localhost:11434/v1` | Ollama 的 OpenAI 相容端點 |
 | `BOT_NAME` | `小幫手` | bot 的名字（判斷有沒有被叫到時會用） |
 | `VISION_ENABLED` | `true` | 是否開啟拍照翻譯 |
