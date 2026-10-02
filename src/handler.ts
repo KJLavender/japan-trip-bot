@@ -2,14 +2,14 @@ import type { ImageContent } from "@mariozechner/pi-ai";
 import { ask, archiveSession } from "./agent.js";
 import { getJpyTwd, fmtJpy, fmtTwd } from "./fx.js";
 import {
-  loadLedger, saveLedger, addMembers, removeExpense, archiveLedger,
+  loadLedger, saveLedger, addMembers, syncUser, removeExpense, archiveLedger,
   formatExpenses, formatSettlement,
 } from "./ledger.js";
 import { addMemo, deleteMemo, archiveMemos, formatMemos } from "./memo.js";
 import { bestPhrase, formatPhrase } from "./phrases.js";
 import { config } from "./config.js";
 
-const HELP = `🗾 ${config.botName} 使用說明
+export const HELP = `🗾 ${config.botName} 使用說明
 ・記帳：@${config.botName} 一蘭 ¥5200 我付，四人分
 ・成員：成員 小明 小華 阿珍 阿凱
 ・帳目：列出所有帳目
@@ -108,20 +108,26 @@ async function fastPath(chatId: string, senderName: string, text: string): Promi
   return undefined;
 }
 
+export interface Sender {
+  /** LINE userId; lets the ledger follow display-name changes. */
+  id?: string;
+  name: string;
+}
+
 export async function handleText(
   chatId: string,
-  senderName: string,
+  sender: Sender | string,
   text: string,
   images: ImageContent[] = [],
 ): Promise<string> {
   if (text.length > config.maxInputChars) return `訊息太長了（上限 ${config.maxInputChars} 字），請分段再問 🙏`;
-  if (senderName) {
-    const ledger = loadLedger(chatId);
-    if (!ledger.members.includes(senderName)) {
-      addMembers(ledger, [senderName]);
-      saveLedger(chatId, ledger);
-    }
-  }
+  const { id, name } = typeof sender === "string" ? { id: undefined, name: sender } : sender;
+  const ledger = loadLedger(chatId);
+  const before = JSON.stringify(ledger);
+  const senderName = id ? syncUser(ledger, id, name) : name;
+  if (!id && senderName) addMembers(ledger, [senderName]);
+  if (JSON.stringify(ledger) !== before) saveLedger(chatId, ledger);
+
   if (images.length === 0) {
     const fast = await fastPath(chatId, senderName, text);
     if (fast !== undefined) return fast;

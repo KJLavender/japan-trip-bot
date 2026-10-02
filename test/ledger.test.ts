@@ -51,3 +51,23 @@ test("removeExpense and validation", () => {
   assert.throws(() => removeExpense(l, 99));
   assert.throws(() => addExpense(l, { description: "x", payer: "A", amountJpy: 0, participants: ["A"] }));
 });
+
+test("display-name change renames the member instead of splitting them", async () => {
+  const { syncUser } = await import("../src/ledger.js");
+  const l = empty();
+  syncUser(l, "U1", "阿凱");
+  syncUser(l, "U2", "小明");
+  addExpense(l, { description: "燒肉", payer: "阿凱", amountJpy: 4000, participants: ["阿凱", "小明"] });
+  assert.equal(syncUser(l, "U1", "凱凱🍜"), "凱凱🍜");
+  assert.deepEqual(l.members, ["凱凱🍜", "小明"]);
+  assert.equal(l.expenses[0].payer, "凱凱🍜");
+  assert.deepEqual(settle(l), [{ from: "小明", to: "凱凱🍜", amountJpy: 2000 }]);
+});
+
+test("two users with the same display name stay separate", async () => {
+  const { syncUser } = await import("../src/ledger.js");
+  const l = empty();
+  assert.equal(syncUser(l, "Uaaaa1111", "小明"), "小明");
+  assert.equal(syncUser(l, "Ubbbb2222", "小明"), "小明#2222");
+  assert.equal(l.members.length, 2);
+});
