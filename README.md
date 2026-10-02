@@ -6,6 +6,8 @@
 - 💴 算錢交給程式、不交給 AI：分帳、結算、台幣換算全部由程式計算，小模型也不會算錯
 - 🔒 資料都存在你自己的電腦，不會上傳到第三方 AI 服務
 
+[![CI](https://github.com/KJLavender/japan-trip-bot/actions/workflows/ci.yml/badge.svg)](https://github.com/KJLavender/japan-trip-bot/actions/workflows/ci.yml)
+
 
 ---
 
@@ -223,7 +225,7 @@ LINE ─webhook─▶ src/index.ts ──▶ src/handler.ts ──┬─ 固定�
 - **工具權限最小化**：agent 只能讀寫自己群組的帳本和記事，沒有執行指令、讀任意檔案或上網的工具
 - **提示詞注入防護**：記事內容會標示為「資料而不是指令」，算錢的邏輯也不經過 AI
 - **資源限制**：訊息上限 1,000 字、照片上限 8 MB、每個群組最多排隊 3 則請求、記事上限 100 則
-- **依賴套件**：已開啟 Dependabot 警示。transitive 依賴 `basic-ftp` 的已知漏洞已透過 `overrides` 升級修補
+- **依賴套件**：CI 每次都會跑 `npm audit`，並已開啟 Dependabot 警示。transitive 依賴 `basic-ftp` 的已知漏洞已透過 `overrides` 升級修補
 
 發現資安問題時，請透過 GitHub 的 [Security Advisories](https://github.com/KJLavender/japan-trip-bot/security/advisories/new) 私下回報，不要開公開 issue。
 
