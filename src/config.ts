@@ -38,6 +38,10 @@ export const config = {
   geminiApiKey: process.env.GEMINI_API_KEY ?? "",
   geminiModel: process.env.GEMINI_MODEL ?? "gemini-3.5-flash-lite",
   geminiDailyLimit: Number(process.env.GEMINI_DAILY_LIMIT ?? 300),
+  // Chat brain: "ollama" (local, default) or "gemini" (chat text goes to Google; local model is
+  // the fallback). Photos are always explained locally.
+  llmProvider: (process.env.LLM_PROVIDER ?? "ollama") as "ollama" | "gemini",
+  geminiChatModel: process.env.GEMINI_CHAT_MODEL ?? "gemini-3.5-flash",
   // If a slow reply misses the reply token, fall back to push (uses monthly quota).
   allowPushFallback: process.env.ALLOW_PUSH_FALLBACK === "true",
 };
