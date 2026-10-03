@@ -145,3 +145,9 @@ test("Gemini quota errors cool down for the advertised retry delay", async () =>
   assert.equal(geminiCooldownMs("fetch failed"), 10 * 60 * 1000);
   assert.equal(geminiCooldownMs("quota exceeded, no delay given"), 60 * 60 * 1000);
 });
+
+test("unsaved-write guard ignores knowledge questions that merely contain a number", async () => {
+  const { claimsUnsavedWrite } = await import("../src/agent.js");
+  assert.equal(claimsUnsavedWrite("太陽城60約240公尺。需要我幫你記下來嗎？", [], "太陽城60大約有多高（公尺）？"), false);
+  assert.equal(claimsUnsavedWrite("好的，已幫你記錄這筆", [], "燒肉 18000 円 阿凱付"), true);
+});

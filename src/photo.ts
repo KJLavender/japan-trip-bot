@@ -245,7 +245,7 @@ export async function explainOcrText(
     noTools: true,
     maxTokens: 700,
     isolated: true,
-    localOnly: true,
+    localOnly: !config.photoCloud,
     historyText: `（傳了一張${KIND_LABEL[analysis.kind].slice(2)}照片）${question}`,
   });
   const unverified = unverifiedPrices(explanation, text);

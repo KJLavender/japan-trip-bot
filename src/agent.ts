@@ -154,9 +154,11 @@ export const NOT_SAVED_MESSAGE =
 export function claimsUnsavedWrite(reply: string, toolsUsed: string[], userText: string): boolean {
   const writes = ["add_expense", "memo_add", "delete_expense", "memo_delete", "set_members"];
   if (toolsUsed.some((t) => writes.includes(t))) return false;
-  // Only guard requests that ask to write something; questions like "迪士尼是哪天" may mention 記錄 harmlessly.
-  if (!/\d|付|分|請客|記|刪|新增|成員|一萬|千/.test(userText)) return false;
-  return /已(?:經)?(?:幫[你您])?(?:記|記錄|記下|記帳|紀錄|登記|新增|刪除)|記下來了|幫[你您](?:記|記錄|記下)|(?:記|記錄)好了|记录|记下/.test(reply);
+  // Only guard requests that ask to write something. A bare number isn't enough:
+  // "太陽城60大約有多高" tripped this, and the model's "需要記下來嗎？" offer looked like a claim.
+  if (!/付|分|請客|記一下|記住|幫我記|刪|新增|成員|[¥￥円]|日幣|日圓|台幣|一萬|千/.test(userText)) return false;
+  const claim = /已(?:經)?(?:幫[你您])?(?:記|記錄|記下|記帳|紀錄|登記|新增|刪除)|記下來了|幫[你您](?:記|記錄|記下)(?![^。！!\n]*[嗎？?])|(?:記|記錄)好了|记录了|记下了/;
+  return claim.test(reply);
 }
 
 function lastAssistantText(messages: AgentMessage[]): string {
@@ -247,6 +249,7 @@ export async function ask(
         geminiCooldownUntil = Date.now() + geminiCooldownMs(s.agent.state.errorMessage);
         s.agent.state.messages = s.agent.state.messages.slice(0, before);
         s.ctx.toolsUsed = [];
+        if (!config.llmFallback) return "（Gemini 失敗，評測模式不改用本機模型）";
         if (await isLlmUp()) await attempt(ollamaModel);
         else return LLM_OFFLINE_MESSAGE;
       }

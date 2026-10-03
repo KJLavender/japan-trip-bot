@@ -45,8 +45,11 @@ export const config = {
   // Chat brain: "ollama" (local, default) or "gemini" (chat text goes to Google; local model is
   // the fallback). Photos are always explained locally.
   llmProvider: (process.env.LLM_PROVIDER ?? "ollama") as "ollama" | "gemini",
+  // Eval switches: compare cloud models without silent local fallback, and on photos.
+  llmFallback: process.env.LLM_FALLBACK !== "false",
+  photoCloud: process.env.PHOTO_USE_CLOUD === "true",
   // Flash-Lite: the free tier of gemini-3.5-flash allowed only 20 requests/day.
-  geminiChatModel: process.env.GEMINI_CHAT_MODEL ?? "gemini-3.5-flash-lite",
+  geminiChatModel: process.env.GEMINI_CHAT_MODEL ?? "gemini-3.1-flash-lite",
   // If a slow reply misses the reply token, fall back to push (uses monthly quota).
   allowPushFallback: process.env.ALLOW_PUSH_FALLBACK === "true",
 };
