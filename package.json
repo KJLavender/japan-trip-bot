@@ -12,7 +12,9 @@
     "backup": "tsx scripts/backup.ts",
     "eval": "tsx scripts/eval.ts",
     "eval:photos": "tsx scripts/eval-photos.ts",
-    "build:dict": "tsx scripts/build-wikidata-dict.ts"
+    "build:dict": "tsx scripts/build-wikidata-dict.ts",
+    "fetch:eval-data": "tsx scripts/fetch-eval-data.ts",
+    "eval:models": "tsx scripts/eval-models.ts"
   },
   "keywords": [],
   "author": "",

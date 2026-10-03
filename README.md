@@ -225,7 +225,7 @@ https://xxxx.trycloudflare.com/webhook
 | `OLLAMA_BASE_URL` | `http://localhost:11434/v1` | Ollama 的 OpenAI 相容端點 |
 | `BOT_NAME` | `小幫手` | bot 的名字（判斷有沒有被叫到時會用） |
 | `LLM_PROVIDER` | `ollama` | 聊天大腦：`ollama`（全部在本機）或 `gemini`（聊天內容送 Google，本機 Ollama 自動備援）；照片一律在本機處理 |
-| `GEMINI_CHAT_MODEL` | `gemini-3.5-flash-lite` | `LLM_PROVIDER=gemini` 時用的模型。免費方案的 gemini-3.5-flash 實測每天只有 20 次 |
+| `GEMINI_CHAT_MODEL` | `gemini-3.1-flash-lite` | `LLM_PROVIDER=gemini` 時用的模型（見「聊天大腦比較」）。免費方案的 gemini-3.5-flash 實測每天只有 20 次 |
 | `GEMINI_API_KEY` | （空） | 選用：字典查不到的詞改問 Gemini；留空就關閉 |
 | `GEMINI_DAILY_LIMIT` | `300` | Gemini 每天最多呼叫次數 |
 | `OCR_URL` | `http://127.0.0.1:8001` | OCR 服務位址；留空就不使用 OCR |
@@ -258,6 +258,26 @@ https://xxxx.trycloudflare.com/webhook
 - 要注意的是，表格裡「記帳」只測口語說法。實際使用時，明確的說法（「燒肉 18000 円 阿凱付，大家分」）由程式處理，任何模型都是 100%
 - 題目數量不多（13 題 × 3 次），只能當作參考。有更大的顯示卡的話，歡迎用 `npm run eval -- <模型>` 測試並分享結果
 - 換模型的方法：在 `.env` 設定 `OLLAMA_BASE_MODEL=<模型>`，再執行 `npm run setup:model`
+
+### 聊天大腦比較（`npm run eval:models`，測資來自網路）
+
+測資用 `npm run fetch:eval-data` 從網路下載並放在 `test/data/`：[Tatoeba](https://tatoeba.org) 的中日旅遊例句（CC BY 2.0 FR，58 句，含多種人工翻譯）、[Wikidata](https://www.wikidata.org) 的日本景點資料（CC0，所在縣市 12 題、建築高度 8 題；有爭議的創建年份刻意不出題）。評測時關閉自動備援，模型失敗就算錯。
+
+測試日期：2026-10-03｜每個模型跑 1 次
+
+| 模型 | 記帳 | 記事問答 | 日文翻譯（chrF） | 景點知識 答對／**亂編**／不知道 | 照片解說* | 平均回應 |
+|---|---|---|---|---|---|---|
+| qwen3.5:4b（本機） | 60% | 100% | 40 | 11／**9**／0 | 63% | 4.5s |
+| gemini-3.5-flash-lite | 100% | 100% | 43 | 13／**7**／0 | 44% | 2.8s |
+| **gemini-3.1-flash-lite**（目前使用） | **100%** | **100%** | **60** | **20／0／0** | **88%** | 4.9s |
+| gemma-4-26b | 100% | 75% | 37 | 13／**7**／0 | 44% | 4.5s |
+| gemma-4-31b | 60% | 100% | 41 | 11／**9**／0 | 69% | 3.8s |
+
+*照片解說：只有本機 qwen 是正式 bot 的做法；雲端模型是評測時才讓它們看照片，正式 bot 不會把照片送給 Google。
+
+- 景點知識的差距最大：qwen 說靖國神社在北海道、首里城在島根縣；3.1 Flash Lite 20 題全對、沒有亂編
+- 較新的 3.5 Flash Lite 反而比 3.1 差，**換模型前一定要實測**
+- 知識題的分數經過人工複核（評分程式原本把「203.65 公尺」讀成 65，已修正）
 
 ### 真實照片評測（`npm run eval:photos`）
 
