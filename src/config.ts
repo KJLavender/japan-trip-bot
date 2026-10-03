@@ -1,7 +1,8 @@
 import { readFileSync, existsSync } from "node:fs";
 
-// Minimal .env loader so we don't need dotenv.
-if (existsSync(".env")) {
+// Minimal .env loader so we don't need dotenv. Skipped under node:test so tests never pick up
+// real API keys (they once burned the day's Gemini quota).
+if (existsSync(".env") && !process.env.NODE_TEST_CONTEXT) {
   for (const line of readFileSync(".env", "utf8").split(/\r?\n/)) {
     const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/);
     if (m && process.env[m[1]] === undefined) process.env[m[1]] = m[2].replace(/^["']|["']$/g, "");
@@ -41,7 +42,8 @@ export const config = {
   // Chat brain: "ollama" (local, default) or "gemini" (chat text goes to Google; local model is
   // the fallback). Photos are always explained locally.
   llmProvider: (process.env.LLM_PROVIDER ?? "ollama") as "ollama" | "gemini",
-  geminiChatModel: process.env.GEMINI_CHAT_MODEL ?? "gemini-3.5-flash",
+  // Flash-Lite: the free tier of gemini-3.5-flash allowed only 20 requests/day.
+  geminiChatModel: process.env.GEMINI_CHAT_MODEL ?? "gemini-3.5-flash-lite",
   // If a slow reply misses the reply token, fall back to push (uses monthly quota).
   allowPushFallback: process.env.ALLOW_PUSH_FALLBACK === "true",
 };
