@@ -224,6 +224,8 @@ https://xxxx.trycloudflare.com/webhook
 | `LLM_TIMEOUT_SECONDS` | `90` | AI 回應逾時 |
 | `OLLAMA_BASE_URL` | `http://localhost:11434/v1` | Ollama 的 OpenAI 相容端點 |
 | `BOT_NAME` | `小幫手` | bot 的名字（判斷有沒有被叫到時會用） |
+| `LLM_PROVIDER` | `ollama` | 聊天大腦：`ollama`（全部在本機）或 `gemini`（聊天內容送 Google，本機 Ollama 自動備援）；照片一律在本機處理 |
+| `GEMINI_CHAT_MODEL` | `gemini-3.5-flash` | `LLM_PROVIDER=gemini` 時用的模型 |
 | `GEMINI_API_KEY` | （空） | 選用：字典查不到的詞改問 Gemini；留空就關閉 |
 | `GEMINI_DAILY_LIMIT` | `300` | Gemini 每天最多呼叫次數 |
 | `OCR_URL` | `http://127.0.0.1:8001` | OCR 服務位址；留空就不使用 OCR |
@@ -352,6 +354,21 @@ LINE ──▶ 雲端 VM（bot + data）──Tailscale 私有網路──▶ �
 
 > ⚠️ **Ollama 沒有任何驗證機制，絕對不要把 11434 port 開放到公網或路由器的 port forwarding。** 任何人連得到就能使用你的 GPU、下載或刪除模型。請只透過 Tailscale 這類私有網路連線，並讓 Ollama 只監聽 `127.0.0.1` 或 Tailscale 介面，不要用 `0.0.0.0`。
 
+### 架構 A'：家裡一台機器 + Tailscale Funnel（固定網址、免費、不用網域）
+
+Cloudflare quick tunnel 每次重啟網址都會變。[Tailscale Funnel](https://tailscale.com/kb/1223/funnel) 會給一個固定的 `https://<主機名>.<tailnet>.ts.net` 網址，免費、不用買網域：
+
+```bash
+# 在跑 Docker 的 Linux／WSL 裡
+docker build -t japan-trip-bot . && docker build -t japan-trip-bot-ocr ocr
+docker network create jtb-net
+docker run -d --name jtb-ocr --restart unless-stopped --network jtb-net --read-only --tmpfs /tmp --cap-drop ALL japan-trip-bot-ocr
+docker run -d --name jtb-bot --restart unless-stopped --network jtb-net --env-file .env   -e OLLAMA_BASE_URL=http://host.docker.internal:11434/v1 -e OCR_URL=http://jtb-ocr:8001 -e DATA_DIR=/app/data   --add-host host.docker.internal:host-gateway -p 127.0.0.1:3000:3000 -v /var/lib/japan-trip-bot:/app/data   --read-only --tmpfs /tmp --cap-drop ALL japan-trip-bot
+tailscale funnel --bg 3000      # 第一次會給一個網址，到 Tailscale 後台按 Enable
+```
+
+把 `https://<主機名>.<tailnet>.ts.net/webhook` 貼到 LINE 的 Webhook 網址。容器設定了 `--restart unless-stopped`，只要 Docker 開機自動啟動，bot 就會自己起來。Funnel 只公開 bot 的 3000 port；OCR 與 Ollama 都不對外。
+
 ### 架構 C：長期（Homelab）
 
 如果你本來就有 K3s 或 Kubernetes，可以把 bot、Ollama、監控（Grafana、Loki）放在同一套基礎設施上。單純跑這個 bot 的話，Docker Compose 就夠用了。
@@ -372,7 +389,8 @@ LINE ──▶ 雲端 VM（bot + data）──Tailscale 私有網路──▶ �
 - **工具權限最小化**：agent 只能讀寫自己群組的帳本和記事，沒有執行指令、讀任意檔案或上網的工具
 - **提示詞注入防護**：記事內容和照片上的 OCR 文字都會標示為「資料而不是指令」；算錢和安全資訊的判斷不經過 AI，就算被注入也改不了
 - **照片隱私**：OCR 在本機執行，照片不會送到外部服務；照片不會存檔，對話紀錄裡的圖片也會移除
-- **Gemini（選用、預設關閉）**：只送出「照片上讀到、而且本機字典查不到的日文片段」（例如「もつ鍋」），不送照片、聊天內容或成員名字；查過的詞存在本機，不會重複送出。藥品照片不使用 Gemini。⚠️ Gemini 免費方案的內容可能被 Google 用來改進產品並由人工審閱，介意的話請不要設定 `GEMINI_API_KEY`。API key 放在 HTTP header，不會出現在網址或紀錄裡
+- **Gemini 聊天大腦（選用、預設關閉）**：設定 `LLM_PROVIDER=gemini` 後，**群組裡對 bot 說的話（含成員名字、金額、記事內容）會送到 Google**；照片仍只在本機處理。Gemini 失敗或額度用完時自動改用本機模型
+- **Gemini 字典（選用、預設關閉）**：只送出「照片上讀到、而且本機字典查不到的日文片段」（例如「もつ鍋」），不送照片、聊天內容或成員名字；查過的詞存在本機，不會重複送出。藥品照片不使用 Gemini。⚠️ Gemini 免費方案的內容可能被 Google 用來改進產品並由人工審閱，介意的話請不要設定 `GEMINI_API_KEY`。API key 放在 HTTP header，不會出現在網址或紀錄裡
 - **資源限制**：訊息上限 1,000 字、照片上限 8 MB、每個群組最多排隊 3 則、全部群組合計最多 8 則、記事上限 100 則、AI 回應逾時 90 秒
 - **容器強化**：bot 和 OCR 都以非 root 執行、唯讀根目錄、移除所有 capabilities、`no-new-privileges`；bot 的 port 只綁 127.0.0.1，OCR 不對外開 port；OCR 模型在建置時下載，執行時不需要連網
 - **資料完整性**：寫檔採用「先寫暫存檔再改名」的原子寫入，當機也不會留下寫到一半的帳本

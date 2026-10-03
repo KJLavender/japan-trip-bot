@@ -26,6 +26,29 @@ const ollamaModel: Model<"openai-completions"> = {
   compat: { supportsDeveloperRole: false, supportsReasoningEffort: true },
 };
 
+/**
+ * Optional cloud brain for chat (LLM_PROVIDER=gemini). Photos never go here: photo turns are
+ * marked localOnly. Any Gemini failure (quota, network) falls back to the local model.
+ */
+const geminiModel: Model<"google-generative-ai"> = {
+  id: config.geminiChatModel,
+  name: config.geminiChatModel,
+  api: "google-generative-ai",
+  provider: "google",
+  baseUrl: "https://generativelanguage.googleapis.com/v1beta",
+  // Lets pi-ai send Gemini 3's lowest thinking level instead of the slow default.
+  reasoning: true,
+  input: ["text", "image"],
+  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+  contextWindow: 1_000_000,
+  maxTokens: 2048,
+};
+
+const GEMINI_COOLDOWN_MS = 10 * 60 * 1000;
+let geminiCooldownUntil = 0;
+const geminiAvailable = () =>
+  config.llmProvider === "gemini" && Boolean(config.geminiApiKey) && Date.now() > geminiCooldownUntil;
+
 interface Session {
   agent: Agent;
   ctx: ChatContext;
@@ -81,7 +104,7 @@ function getSession(chatId: string): Session {
       messages: readJson<AgentMessage[]>("sessions", chatId, []),
     },
     sessionId: chatId,
-    getApiKey: () => "ollama",
+    getApiKey: (provider) => (provider === "google" ? config.geminiApiKey : "ollama"),
     transformContext: async (msgs) => pruneContext(msgs),
   });
   agent.subscribe((event) => {
@@ -167,6 +190,8 @@ export interface AskOptions {
   isolated?: boolean;
   /** Store this instead of the full prompt in history (keeps OCR dumps out of later context). */
   historyText?: string;
+  /** Never use the cloud model (photo turns: photos stay on this machine). */
+  localOnly?: boolean;
 }
 
 export async function ask(
@@ -176,7 +201,8 @@ export async function ask(
   images: ImageContent[] = [],
   opts: AskOptions = {},
 ): Promise<string> {
-  if (!(await isLlmUp())) return LLM_OFFLINE_MESSAGE;
+  const cloud = !opts.localOnly && geminiAvailable();
+  if (!cloud && !(await isLlmUp())) return LLM_OFFLINE_MESSAGE;
   const s = getSession(chatId);
   // One Ollama serves every group, so cap the total backlog as well as per-chat.
   if (s.pending >= MAX_PENDING || globalPending >= MAX_GLOBAL_PENDING) {
@@ -191,16 +217,31 @@ export async function ask(
     s.agent.state.systemPrompt = opts.systemPrompt ?? systemPrompt(chatId);
     const tools = s.agent.state.tools;
     const model = s.agent.state.model;
-    if (opts.maxTokens) s.agent.state.model = { ...model, maxTokens: opts.maxTokens };
     if (opts.noTools) s.agent.state.tools = [];
     // Isolated turns (photos) don't need the chat history: it only makes the prompt long and slow.
     const history = opts.isolated ? s.agent.state.messages : undefined;
     if (history) s.agent.state.messages = [];
-    const timer = setTimeout(() => s.agent.abort(), config.llmTimeoutMs);
+    const attempt = async (m: Model<any>) => {
+      s.agent.state.model = opts.maxTokens ? { ...m, maxTokens: opts.maxTokens } : m;
+      const timer = setTimeout(() => s.agent.abort(), config.llmTimeoutMs);
+      try {
+        await s.agent.prompt(`[${senderName}] ${text}`, images);
+      } finally {
+        clearTimeout(timer);
+      }
+    };
     try {
-      await s.agent.prompt(`[${senderName}] ${text}`, images);
+      const before = s.agent.state.messages.length;
+      await attempt(cloud ? geminiModel : ollamaModel);
+      if (cloud && s.agent.state.errorMessage && !/abort/i.test(s.agent.state.errorMessage)) {
+        // Quota, outage, bad key…: answer locally now and skip Gemini for a while.
+        console.warn("[agent] Gemini failed, falling back to local model:", s.agent.state.errorMessage.slice(0, 120));
+        geminiCooldownUntil = Date.now() + GEMINI_COOLDOWN_MS;
+        s.agent.state.messages = s.agent.state.messages.slice(0, before);
+        s.ctx.toolsUsed = [];
+        if (await isLlmUp()) await attempt(ollamaModel);
+      }
     } finally {
-      clearTimeout(timer);
       s.agent.state.tools = tools;
       s.agent.state.model = model;
       // Put the exchange back into the history so follow-up questions still have context.
