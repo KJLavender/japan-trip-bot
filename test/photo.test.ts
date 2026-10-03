@@ -118,3 +118,21 @@ test("model re-stating the allergen header in its own words is dropped", async (
   const { dropUnsafeLines } = await import("../src/photo.js");
   assert.equal(dropUnsafeLines("唐揚げ → 炸雞\n⚠️ 通常也含：小麥（所有炸物）", ["⚠️ 通常也含：小麥（フライ）"]), "唐揚げ → 炸雞");
 });
+
+test("allergen labels that say NOT used are not reported as present", async () => {
+  const { detectAllergensWithNegation } = await import("../src/knowledge/safety.js");
+  const vegan = detectAllergensWithNegation("小麦、乳、卵\n不使用\nヴィーガンスイーツ");
+  assert.deepEqual(vegan.present, []);
+  assert.deepEqual(vegan.notUsed.map((h) => h.label).sort(), ["小麥", "乳製品", "蛋"].sort());
+  // Mentioned as not used once, but used in another dish: keep warning (fail safe).
+  const mixed = detectAllergensWithNegation("卵不使用パンケーキ\nだし巻き卵 500円");
+  assert.deepEqual(mixed.present.map((h) => h.label), ["蛋"]);
+  const header = analyzeText("ヴィーガンスイーツ 各100円\n小麦、乳、卵 不使用").header.join("\n");
+  assert.match(header, /標示不使用：/);
+  assert.doesNotMatch(header, /⚠️ 過敏原：/);
+});
+
+test("HTML tags and markdown bullets are stripped for LINE", async () => {
+  const { stripMarkdown } = await import("../src/agent.js");
+  assert.equal(stripMarkdown("<details><summary>🍪 麵包蛋糕</summary></details> 招牌\n* 價格：100円"), "🍪 麵包蛋糕 招牌\n・價格：100円");
+});

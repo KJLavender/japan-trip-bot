@@ -6,7 +6,7 @@ import { isLlmUp } from "./llm-health.js";
 import { ocrImage } from "./ocr.js";
 import { geminiEnabled, lookupTerms, unknownFragments } from "./gemini.js";
 import {
-  detectAlcohol, detectAllergens, detectDrugWarnings, detectRaw, drugClass, drugDosage, type Hit,
+  detectAlcohol, detectAllergensWithNegation, detectDrugWarnings, detectRaw, drugClass, drugDosage, type Hit,
 } from "./knowledge/safety.js";
 import {
   FOODS, MENU_TERMS, NOTICE_TERMS, OMAMORI, OMIKUJI_FIELDS, OMIKUJI_LEVELS, PRODUCT_TERMS, WIKI_FOODS, findTerms, type Term,
@@ -96,9 +96,10 @@ export function analyzeText(text: string): PhotoAnalysis {
   const header: string[] = [];
   const facts: string[] = [];
 
-  if (kind === "menu" || kind === "product") {
+  // General photos too: a shop-front sign can list allergens without looking like a menu.
+  if (kind === "menu" || kind === "product" || kind === "general") {
     const foods = findTerms(text, FOODS, WIKI_FOODS);
-    const allergens = detectAllergens(text);
+    const { present: allergens, notUsed } = detectAllergensWithNegation(text);
     // Dishes that usually contain an allergen even when the menu doesn't spell it out.
     const implied = new Map<string, string[]>();
     for (const f of foods) {
@@ -107,6 +108,9 @@ export function analyzeText(text: string): PhotoAnalysis {
       }
     }
     if (allergens.length) header.push(`⚠️ 過敏原：${hitList(allergens)}`);
+    if (notUsed.length) {
+      header.push(`🏷 標示不使用：${notUsed.map((h) => h.label).join("、")}（仍可能有微量或交叉污染，嚴重過敏請向店員確認）`);
+    }
     if (implied.size) {
       header.push(`⚠️ 通常也含：${[...implied].map(([a, dishes]) => `${a}（${dishes.join("、")}）`).join("、")}`);
     }
@@ -134,9 +138,8 @@ export function analyzeText(text: string): PhotoAnalysis {
     facts.push(...findTerms(text, OMIKUJI_FIELDS).map(termLine), ...findTerms(text, OMAMORI).map(termLine));
   }
 
-  if (kind === "general") {
-    facts.push(...[MENU_TERMS, NOTICE_TERMS, PRODUCT_TERMS].flatMap((d) => findTerms(text, d).map(termLine)));
-  }
+  // Menu and product terms were already added above for general photos.
+  if (kind === "general") facts.push(...findTerms(text, NOTICE_TERMS).map(termLine));
 
   const prices = [...new Set(text.match(/[\d,]+\s*円/g) ?? [])].slice(0, 20);
   if (prices.length) facts.push(`照片上的價格：${prices.join("、")}`);
