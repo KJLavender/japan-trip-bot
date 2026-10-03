@@ -4,7 +4,7 @@
 
 - 🧠 使用 [Pi agent](https://github.com/badlogic/pi-mono)（`@mariozechner/pi-agent-core`），搭配本地 [Ollama](https://ollama.com) 模型，不需要付費的 AI API
 - 🧮 **事實交給程式，AI 只負責理解和解說**：算錢、過敏原、酒精、藥品用法都由程式判斷，不讓小模型猜
-- 🔒 資料都存在你自己的電腦；照片用本機 OCR 辨識，不會上傳到第三方 AI 服務
+- 🔒 預設全部在本機（Ollama + 本機 OCR）；想要更準可以改用 Gemini，要送出哪些資料由設定決定，見「資安設計」
 
 [![CI](https://github.com/KJLavender/japan-trip-bot/actions/workflows/ci.yml/badge.svg)](https://github.com/KJLavender/japan-trip-bot/actions/workflows/ci.yml)
 
@@ -225,6 +225,7 @@ https://xxxx.trycloudflare.com/webhook
 | `OLLAMA_BASE_URL` | `http://localhost:11434/v1` | Ollama 的 OpenAI 相容端點 |
 | `BOT_NAME` | `小幫手` | bot 的名字（判斷有沒有被叫到時會用） |
 | `LLM_PROVIDER` | `ollama` | 聊天大腦：`ollama`（全部在本機）或 `gemini`（聊天內容送 Google，本機 Ollama 自動備援）；照片一律在本機處理 |
+| `PHOTO_USE_CLOUD` | `false` | `true` = 照片也交給 Gemini 解說（照片會送到 Google；失敗時改用本機） |
 | `GEMINI_CHAT_MODEL` | `gemini-3.1-flash-lite` | `LLM_PROVIDER=gemini` 時用的模型（見「聊天大腦比較」）。免費方案的 gemini-3.5-flash 實測每天只有 20 次 |
 | `GEMINI_API_KEY` | （空） | 選用：字典查不到的詞改問 Gemini；留空就關閉 |
 | `GEMINI_DAILY_LIMIT` | `300` | Gemini 每天最多呼叫次數 |
@@ -273,7 +274,7 @@ https://xxxx.trycloudflare.com/webhook
 | gemma-4-26b | 100% | 75% | 37 | 13／**7**／0 | 44% | 4.5s |
 | gemma-4-31b | 60% | 100% | 41 | 11／**9**／0 | 69% | 3.8s |
 
-*照片解說：只有本機 qwen 是正式 bot 的做法；雲端模型是評測時才讓它們看照片，正式 bot 不會把照片送給 Google。
+*照片解說：雲端模型的分數是讓它們看照片量到的。正式 bot 預設照片只在本機處理；設定 `PHOTO_USE_CLOUD=true` 才會讓 Gemini 看照片。
 
 - 景點知識的差距最大：qwen 說靖國神社在北海道、首里城在島根縣；3.1 Flash Lite 20 題全對、沒有亂編
 - 較新的 3.5 Flash Lite 反而比 3.1 差，**換模型前一定要實測**
@@ -410,7 +411,7 @@ tailscale funnel --bg 3000      # 第一次會給一個網址，到 Tailscale �
 - **路徑安全**：寫檔用的 chatId 只接受英數字，其他一律雜湊，避免路徑穿越
 - **工具權限最小化**：agent 只能讀寫自己群組的帳本和記事，沒有執行指令、讀任意檔案或上網的工具
 - **提示詞注入防護**：記事內容和照片上的 OCR 文字都會標示為「資料而不是指令」；算錢和安全資訊的判斷不經過 AI，就算被注入也改不了
-- **照片隱私**：OCR 在本機執行，照片不會送到外部服務；照片不會存檔，對話紀錄裡的圖片也會移除
+- **照片隱私**：OCR 一律在本機執行；照片不會存檔，對話紀錄裡的圖片也會移除。預設照片不會送到外部服務；設定 `LLM_PROVIDER=gemini` 且 `PHOTO_USE_CLOUD=true` 時，**照片會送給 Gemini 解說**（評測正確率 63% → 88%），過敏原、酒精、藥品等安全資訊仍只由本機程式判斷
 - **Gemini 聊天大腦（選用、預設關閉）**：設定 `LLM_PROVIDER=gemini` 後，**群組裡對 bot 說的話（含成員名字、金額、記事內容）會送到 Google**；照片仍只在本機處理。Gemini 失敗或額度用完時自動改用本機模型
 - **Gemini 字典（選用、預設關閉）**：只送出「照片上讀到、而且本機字典查不到的日文片段」（例如「もつ鍋」），不送照片、聊天內容或成員名字；查過的詞存在本機，不會重複送出。藥品照片不使用 Gemini。⚠️ Gemini 免費方案的內容可能被 Google 用來改進產品並由人工審閱，介意的話請不要設定 `GEMINI_API_KEY`。API key 放在 HTTP header，不會出現在網址或紀錄裡
 - **資源限制**：訊息上限 1,000 字、照片上限 8 MB、每個群組最多排隊 3 則、全部群組合計最多 8 則、記事上限 100 則、AI 回應逾時 90 秒
