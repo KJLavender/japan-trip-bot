@@ -96,3 +96,27 @@ export function drugDosage(text: string): string[] {
   if (/就寝前/.test(text)) out.push("睡前服用");
   return out;
 }
+
+// "小麦、乳、卵 不使用" / "卵フリー" / "乳製品なし": the label says the allergen is NOT used.
+const NEGATION = /^[\s、,・／/・と及び]*(?:(?:小麦|乳|卵|そば|落花生|えび|かに)[\s、,・／/と及び]*)*(?:不使用|使用していません|フリー|なし|無し|抜き|除去|不含)/;
+
+/**
+ * Split allergen hits into ones the text says are present vs. explicitly not used.
+ * A word counts as "not used" only when every occurrence is followed by a negation,
+ * so one mention elsewhere on the menu keeps it in the warning (fail safe).
+ */
+export function detectAllergensWithNegation(text: string): { present: Hit[]; notUsed: Hit[] } {
+  // Bare 乳 is too ambiguous on its own, but in a 小麦・乳・卵 list it is the milk allergen.
+  const listed = /(?:小麦|卵)[、,・]\s*乳|乳[、,・]\s*(?:小麦|卵)/.test(text) ? [{ label: "乳製品", matched: ["乳"] }] : [];
+  const present: Hit[] = [];
+  const notUsed: Hit[] = [];
+  for (const hit of [...detectAllergens(text), ...listed.filter((l) => !detectAllergens(text).some((h) => h.label === l.label))]) {
+    const negated = hit.matched.every((w) => {
+      const positions: number[] = [];
+      for (let i = text.indexOf(w); i >= 0; i = text.indexOf(w, i + 1)) positions.push(i);
+      return positions.length > 0 && positions.every((i) => NEGATION.test(text.slice(i + w.length, i + w.length + 24)));
+    });
+    (negated ? notUsed : present).push(hit);
+  }
+  return { present, notUsed };
+}

@@ -141,7 +141,10 @@ export function stripMarkdown(text: string): string {
         .replace(/^\s*\|\s*|\s*\|\s*$/g, "") // table edges
         .replace(/\s*\|\s*/g, "｜")
         .replace(/^#{1,6}\s+/, "")
-        .replace(/<br\s*\/?>/gi, "")
+        // LINE shows HTML literally; models sometimes emit <details>, <br> and friends.
+        .replace(/<\/?[a-zA-Z][^>]*>/g, "")
+        // "* item" / "- item" bullets show up as literal symbols.
+        .replace(/^\s*[*\-•]\s+/, "・")
         .replace(/\*\*(.+?)\*\*/g, "$1"),
     )
     .join("\n");
