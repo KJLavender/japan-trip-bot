@@ -113,3 +113,8 @@ test("katakana compounds ending in a known word still match (ミンチカツ →
   const katsu = FOODS.find((t) => t.ja.includes("カツ"))!;
   assert.equal(findTerms("カツオのたたき", [katsu]).length, 0, "カツオ (bonito) is not カツ");
 });
+
+test("model re-stating the allergen header in its own words is dropped", async () => {
+  const { dropUnsafeLines } = await import("../src/photo.js");
+  assert.equal(dropUnsafeLines("唐揚げ → 炸雞\n⚠️ 通常也含：小麥（所有炸物）", ["⚠️ 通常也含：小麥（フライ）"]), "唐揚げ → 炸雞");
+});

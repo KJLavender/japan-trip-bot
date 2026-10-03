@@ -173,7 +173,7 @@ const onError: ErrorRequestHandler = (err, _req, res, _next) => {
 };
 app.use(onError);
 
-app.listen(config.port, () => {
-  console.log(`🗾 japan-trip-bot listening on :${config.port}/webhook`);
+app.listen(config.port, config.host, () => {
+  console.log(`🗾 japan-trip-bot listening on ${config.host}:${config.port}/webhook`);
   void checkModel();
 });

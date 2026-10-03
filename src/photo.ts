@@ -291,6 +291,8 @@ export function truncateLines(text: string, max: number): string {
 
 
 /** "沒有過敏原" etc.: code not finding something doesn't mean it isn't there. */
+// The model also re-states the code header in its own words ("⚠️ 通常也含：…"); code owns those lines.
+const RESTATED_HEADER = /^\s*⚠️?\s*(過敏原|通常也含|含酒精|生食)/u;
 const ABSENCE_CLAIM = /(沒|沒有|不含|無|未含|零)\s*(過敏原|酒精|酒|藥|藥物成分|添加物)/;
 
 /** Drop absence claims, and lines that just repeat the code-generated header. */
@@ -299,7 +301,7 @@ export function dropUnsafeLines(text: string, header: string[]): string {
   const headerSet = new Set(header.map(norm));
   return text
     .split("\n")
-    .filter((line) => !ABSENCE_CLAIM.test(line) && !(norm(line) && headerSet.has(norm(line))))
+    .filter((line) => !ABSENCE_CLAIM.test(line) && !RESTATED_HEADER.test(line) && !(norm(line) && headerSet.has(norm(line))))
     .join("\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
