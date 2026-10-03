@@ -362,12 +362,14 @@ Cloudflare quick tunnel 每次重啟網址都會變。[Tailscale Funnel](https:/
 # 在跑 Docker 的 Linux／WSL 裡
 docker build -t japan-trip-bot . && docker build -t japan-trip-bot-ocr ocr
 docker network create jtb-net
-docker run -d --name jtb-ocr --restart unless-stopped --network jtb-net --read-only --tmpfs /tmp --cap-drop ALL japan-trip-bot-ocr
-docker run -d --name jtb-bot --restart unless-stopped --network jtb-net --env-file .env   -e OLLAMA_BASE_URL=http://host.docker.internal:11434/v1 -e OCR_URL=http://jtb-ocr:8001 -e DATA_DIR=/app/data   --add-host host.docker.internal:host-gateway -p 127.0.0.1:3000:3000 -v /var/lib/japan-trip-bot:/app/data   --read-only --tmpfs /tmp --cap-drop ALL japan-trip-bot
+docker run -d --name jtb-ocr --restart unless-stopped --network jtb-net -p 127.0.0.1:8001:8001   --read-only --tmpfs /tmp --cap-drop ALL japan-trip-bot-ocr
+docker run -d --name jtb-bot --restart unless-stopped --network host --env-file .env   -e HOST=127.0.0.1 -e OLLAMA_BASE_URL=http://127.0.0.1:11434/v1 -e OCR_URL=http://127.0.0.1:8001 -e DATA_DIR=/app/data   -v /var/lib/japan-trip-bot:/app/data --read-only --tmpfs /tmp --cap-drop ALL japan-trip-bot
 tailscale funnel --bg 3000      # 第一次會給一個網址，到 Tailscale 後台按 Enable
 ```
 
 把 `https://<主機名>.<tailnet>.ts.net/webhook` 貼到 LINE 的 Webhook 網址。容器設定了 `--restart unless-stopped`，只要 Docker 開機自動啟動，bot 就會自己起來。Funnel 只公開 bot 的 3000 port；OCR 與 Ollama 都不對外。
+
+> 為什麼 bot 用 `--network host`？在 WSL 的 mirrored 網路模式下，Docker 橋接網路對外連線時好時壞（實測連 `api.line.me` 逾時，bot 就沒辦法回覆訊息），共用主機網路才穩定。也因為共用主機網路，一定要設定 `HOST=127.0.0.1`，否則區網裡的其他裝置也連得到 bot。
 
 ### 架構 C：長期（Homelab）
 

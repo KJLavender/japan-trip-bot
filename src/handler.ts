@@ -21,7 +21,8 @@ export const HELP = `🗾 ${config.botName} 使用說明
 ・救急日文：怎麼說「可以刷卡嗎」
 ・記事：記一下：飯店是 xxx／記事／刪除記事 #2
 ・行程問答：明天幾點集合？（根據記事回答）
-・拍照翻譯：先傳照片，再回覆（引用）那張照片並 @${config.botName} 翻譯
+・拍照解說：傳照片後 @${config.botName} 問「這啥」「可以吃嗎」
+・交通：成田到上野怎麼去（給 Google Maps 路線）
 ・新旅程：封存本趟帳目、記事與對話，重新開始`;
 
 const errorText = (err: unknown) => (err as Error).message;

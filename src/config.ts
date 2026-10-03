@@ -11,6 +11,9 @@ if (existsSync(".env") && !process.env.NODE_TEST_CONTEXT) {
 
 export const config = {
   port: Number(process.env.PORT ?? 3000),
+  // 0.0.0.0 inside a bridged container; 127.0.0.1 when sharing the host network so the bot
+  // is only reachable through the tunnel, not from the LAN.
+  host: process.env.HOST ?? "0.0.0.0",
   lineChannelSecret: process.env.LINE_CHANNEL_SECRET ?? "",
   lineAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN ?? "",
   botName: process.env.BOT_NAME ?? "小幫手",
