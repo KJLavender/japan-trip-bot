@@ -225,7 +225,7 @@ https://xxxx.trycloudflare.com/webhook
 | `OLLAMA_BASE_URL` | `http://localhost:11434/v1` | Ollama 的 OpenAI 相容端點 |
 | `BOT_NAME` | `小幫手` | bot 的名字（判斷有沒有被叫到時會用） |
 | `LLM_PROVIDER` | `ollama` | 聊天大腦：`ollama`（全部在本機）或 `gemini`（聊天內容送 Google，本機 Ollama 自動備援）；照片一律在本機處理 |
-| `GEMINI_CHAT_MODEL` | `gemini-3.5-flash` | `LLM_PROVIDER=gemini` 時用的模型 |
+| `GEMINI_CHAT_MODEL` | `gemini-3.5-flash-lite` | `LLM_PROVIDER=gemini` 時用的模型。免費方案的 gemini-3.5-flash 實測每天只有 20 次 |
 | `GEMINI_API_KEY` | （空） | 選用：字典查不到的詞改問 Gemini；留空就關閉 |
 | `GEMINI_DAILY_LIMIT` | `300` | Gemini 每天最多呼叫次數 |
 | `OCR_URL` | `http://127.0.0.1:8001` | OCR 服務位址；留空就不使用 OCR |

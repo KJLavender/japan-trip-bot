@@ -46,6 +46,14 @@ const geminiModel: Model<"google-generative-ai"> = {
 
 const GEMINI_COOLDOWN_MS = 10 * 60 * 1000;
 let geminiCooldownUntil = 0;
+
+/** Daily-quota errors say how long to wait ("retryDelay": "60333s"); honour it (max 24h). */
+export function geminiCooldownMs(error: string): number {
+  if (!/RESOURCE_EXHAUSTED|quota/i.test(error)) return GEMINI_COOLDOWN_MS;
+  // The JSON arrives escaped inside the message, so allow any non-digits between key and number.
+  const seconds = Number(error.match(/retryDelay\D{0,8}(\d+)s/)?.[1] ?? 60 * 60);
+  return Math.min(Math.max(seconds * 1000, GEMINI_COOLDOWN_MS), 24 * 60 * 60 * 1000);
+}
 const geminiAvailable = () =>
   config.llmProvider === "gemini" && Boolean(config.geminiApiKey) && Date.now() > geminiCooldownUntil;
 
@@ -236,10 +244,11 @@ export async function ask(
       if (cloud && s.agent.state.errorMessage && !/abort/i.test(s.agent.state.errorMessage)) {
         // Quota, outage, bad key…: answer locally now and skip Gemini for a while.
         console.warn("[agent] Gemini failed, falling back to local model:", s.agent.state.errorMessage.slice(0, 120));
-        geminiCooldownUntil = Date.now() + GEMINI_COOLDOWN_MS;
+        geminiCooldownUntil = Date.now() + geminiCooldownMs(s.agent.state.errorMessage);
         s.agent.state.messages = s.agent.state.messages.slice(0, before);
         s.ctx.toolsUsed = [];
         if (await isLlmUp()) await attempt(ollamaModel);
+        else return LLM_OFFLINE_MESSAGE;
       }
     } finally {
       s.agent.state.tools = tools;

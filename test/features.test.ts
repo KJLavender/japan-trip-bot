@@ -137,3 +137,11 @@ test("東方娃娃: ambiguous quantity asks, clear per-unit phrasing multiplies"
   assert.match(await handleText("g10", "KJ", "東方娃娃6600日幣總共15隻"), /想確認一下是哪一種/);
   assert.match(await handleText("g10", "KJ", "東方娃娃每隻6600，15隻"), /已記帳 #1：東方娃娃 ×15 ¥99,000/);
 });
+
+test("Gemini quota errors cool down for the advertised retry delay", async () => {
+  const { geminiCooldownMs } = await import("../src/agent.js");
+  const quota = String.raw`{"error":{"message":"{\n \"status\": \"RESOURCE_EXHAUSTED\", \"retryDelay\": \"60333s\"}","code":429}}`;
+  assert.equal(geminiCooldownMs(quota), 60333 * 1000);
+  assert.equal(geminiCooldownMs("fetch failed"), 10 * 60 * 1000);
+  assert.equal(geminiCooldownMs("quota exceeded, no delay given"), 60 * 60 * 1000);
+});
