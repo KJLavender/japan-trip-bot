@@ -1,21 +1,25 @@
-# 🗾 japan-trip-bot：日本旅遊群組小幫手
+# 🗾 japan-trip-bot: a helper for your Japan trip group chat
 
-一個住在 LINE 旅遊群組裡的 bot。出發前把它拉進群組，旅途中可以用它分帳、查救急日文、記行程，也能拍照解說菜單、藥品和告示。
+**English** | [繁體中文](README.zh-TW.md)
 
-- 🧠 使用 [Pi agent](https://github.com/badlogic/pi-mono)（`@mariozechner/pi-agent-core`），搭配本地 [Ollama](https://ollama.com) 模型，不需要付費的 AI API
-- 🧮 **事實交給程式，AI 只負責理解和解說**：算錢、過敏原、酒精、藥品用法都由程式判斷，不讓小模型猜
-- 🔒 預設全部在本機（Ollama + 本機 OCR）；想要更準可以改用 Gemini，要送出哪些資料由設定決定，見「資安設計」
+A bot that lives in your LINE travel group. Add it to the group before you leave; on the trip it splits the bill, gives you emergency Japanese phrases, keeps trip notes, and explains photos of menus, medicine and signs.
+
+- 🧠 Built on [Pi agent](https://github.com/badlogic/pi-mono) (`@mariozechner/pi-agent-core`) with a local [Ollama](https://ollama.com) model — no paid AI API needed
+- 🧮 **Facts are handled by code; the AI only understands and explains**: money, allergens, alcohol and medicine dosage are decided by code, never guessed by a small model
+- 🔒 Everything runs locally by default (Ollama + local OCR); you can switch to Gemini for better accuracy, and the settings decide exactly what data leaves your machine — see [Security](#-security)
+
+> The bot talks to users in Traditional Chinese, so the commands and chat examples below are kept in Chinese with English explanations.
 
 [![CI](https://github.com/KJLavender/japan-trip-bot/actions/workflows/ci.yml/badge.svg)](https://github.com/KJLavender/japan-trip-bot/actions/workflows/ci.yml)
 
 
 ---
 
-## ✨ 功能
+## ✨ Features
 
-### 1. 💴 日圓分帳與即時匯率（核心功能）
+### 1. 💴 Yen bill splitting with live exchange rates (core feature)
 
-用平常說話的方式記帳，旅程結束時一鍵結算，算出最少的轉帳次數。
+Log expenses the way you'd normally say them, then settle up in one step at the end of the trip with the fewest possible transfers.
 
 ```
 小明：@小幫手 一蘭 ¥5,200 我付，四人分
@@ -29,15 +33,17 @@
         小明 → 阿珍：¥600 ≈ NT$122
 ```
 
-- 常見說法（金額、誰付、怎麼分都講清楚）**由程式直接解析**，不經過 AI，又快又不會記錯；說法比較口語的（例如「一萬八」「跟小華對分」）才交給 AI
-- 「我」會自動對應到發話者，也支援「我跟小華分」這種指定分攤者的說法
-- AI 如果回答「已記帳」卻沒有真的記下來，bot 會攔下來並請你換個說法，不會讓你誤以為記好了
-- 有人改 LINE 名稱也不會影響帳目（內部用 LINE userId 對應）
-- 可以記台幣花費（例如機票），會依當下匯率換算成日圓入帳
-- 匯率來自 [open.er-api.com](https://open.er-api.com)（免費、不需要 API key），快取 1 小時
-- 分攤金額以整數日圓計算，餘數分給前幾位，總額不會差 1 円
+*(Xiaoming: "Ichiran ¥5,200, I paid, split four ways" → logged as expense #1. Later someone says 「結算」 "settle up" and the bot lists who pays whom.)*
 
-### 2. 🗣 救急日文
+- Common phrasings (amount, payer and split all stated clearly) are **parsed by code**, not the AI — fast and never mis-recorded. Only casual phrasings (e.g. 「一萬八」 "eighteen thousand", 「跟小華對分」 "split with Xiaohua") go to the AI
+- 「我」 ("I/me") maps to whoever sent the message, and "split between me and Xiaohua" style phrasing is supported
+- If the AI says "logged" without actually logging anything, the bot catches it and asks you to rephrase, so you're never misled into thinking it was recorded
+- Changing your LINE display name doesn't break the ledger (LINE userIds are used internally)
+- You can log NT$ expenses (e.g. flights); they're converted to yen at the current rate
+- Exchange rates come from [open.er-api.com](https://open.er-api.com) (free, no API key), cached for 1 hour
+- Shares are computed in whole yen with the remainder given to the first few people, so totals never drift by ¥1
+
+### 2. 🗣 Emergency Japanese
 
 ```
 @小幫手 怎麼說「可以刷卡嗎」
@@ -48,10 +54,12 @@
 💬 可以刷卡嗎？
 ```
 
-- 內建 46 句**人工校對**的旅遊常用句，涵蓋付款、餐廳、交通、住宿與緊急狀況。命中句庫就直接回覆，不經過 AI
-- 句庫沒有的句子才交給 AI 翻譯，並自動附上「⚠️ AI 翻譯，可能不準確」的提醒
+*("How do I say 'Can I pay by card?'" → Japanese, kana reading, romaji and the Chinese meaning.)*
 
-### 3. 📒 行程記事
+- 46 **human-checked** travel phrases covering payment, restaurants, transport, lodging and emergencies. A phrase-book hit is answered directly without the AI
+- Anything not in the phrase book is translated by the AI and automatically tagged "⚠️ AI translation, may be inaccurate"
+
+### 3. 📒 Trip notes
 
 ```
 @小幫手 記一下：明天 9:00 新宿站南口集合，飯店 APA 新宿歌舞伎町，訂房代號 HX4821
@@ -59,12 +67,14 @@
 小幫手：根據 #1：明天 9 點在新宿站南口集合！
 ```
 
-- 群組共用的記事本，每個群組各自獨立
-- 問行程問題時，bot 會根據記事回答並標出來源；記事裡沒有的資訊，會直接說沒有，不會亂編
+*("Note: meet at Shinjuku Station south exit at 9:00 tomorrow, hotel APA Shinjuku Kabukicho, booking code HX4821" → "Where and when do we meet tomorrow?" → "Per note #1: 9 o'clock at the Shinjuku Station south exit!")*
 
-### 4. 📷 拍照解說：不只翻譯，還告訴你是什麼
+- A shared notebook per group; each group's notes are separate
+- When you ask about the itinerary, the bot answers from the notes and cites the source; if the notes don't say, it says so instead of making things up
 
-翻譯 App 會把「期間限定」翻成「期間限定」，把「お通し」翻成「小菜」；你看得懂字，卻不知道這代表「季節商品賣完就沒了」、「這碟小菜要收錢」。這個 bot 做的是**解說**：
+### 4. 📷 Photo explanations: not just translation, but what it means
+
+A translation app turns 「期間限定」 into "limited period" and 「お通し」 into "appetizer" — you can read the words but don't learn that it means "seasonal item, gone when it sells out" or "this little dish is charged". This bot **explains**:
 
 ```
 🍽 菜單
@@ -77,58 +87,60 @@
 ...
 ```
 
-處理流程：
+*(Menu → allergen: shrimp; usually also contains wheat and egg (tempura); contains alcohol: beer, sour, plum wine; then each item with its price in NT$ and an explanation.)*
+
+Pipeline:
 
 ```
-照片 → OCR（本機 PP-OCRv5，可讀直書）→ 分類（菜單／藥品／告示／神社／商品）
-     → 程式偵測安全資訊 + 查旅遊知識庫 → 依類型套用專用 prompt → AI 整理成解說
+photo → OCR (local PP-OCRv5, reads vertical text) → classify (menu / medicine / notice / shrine / product)
+      → code detects safety info + travel knowledge base lookup → type-specific prompt → AI writes the explanation
 ```
 
-- **安全資訊由程式偵測，不靠 AI**：日本法定的 8 項過敏原（蝦、蟹、小麥、蕎麥、蛋、乳、花生、核桃）、料理「通常會含」的過敏原、酒精（會排除無酒精飲品）、生食、藥品分類、用法用量、嗜睡／年齡／哺乳等警語
-- **三層字典**：① 人工校對的旅遊知識庫 → ② [Wikidata](https://www.wikidata.org) 匯入的約 5,000 項料理、飲料、魚類（CC0，`npm run build:dict` 重新產生）→ ③ 都查不到的詞才問 Gemini（選用，見下方）
-- **人工整理的旅遊知識庫**：菜單用語（お通し、替え玉、食券…）、車站告示（運転見合わせ、振替輸送…）、約 60 種料理、神社籤詩與御守
-- 藥品會特別提醒容易誤會的地方，例如「食間」是兩餐之間，不是吃飯時
-- AI 離線時，仍會回覆程式辨識出的安全資訊和用語解釋
+- **Safety info is detected by code, not the AI**: Japan's 8 mandatory allergens (shrimp, crab, wheat, buckwheat, egg, milk, peanut, walnut), allergens a dish "usually contains", alcohol (non-alcoholic drinks excluded), raw food, medicine category, dosage, and warnings about drowsiness / age / breastfeeding
+- **Three-tier dictionary**: ① human-checked travel knowledge base → ② ~5,000 dishes, drinks and fish imported from [Wikidata](https://www.wikidata.org) (CC0, regenerate with `npm run build:dict`) → ③ only words found in neither are sent to Gemini (optional, see below)
+- **Hand-curated travel knowledge base**: menu terms (お通し, 替え玉, 食券…), station notices (運転見合わせ, 振替輸送…), ~60 dishes, shrine fortunes and charms
+- Medicine explanations flag common misunderstandings, e.g. 「食間」 means *between* meals, not *during* a meal
+- When the AI is offline, the bot still replies with the safety info and term explanations found by code
 
-**怎麼用**：在群組傳照片後 `@小幫手`，問什麼都可以（「這啥」「可以吃嗎」「這藥是啥」）；兩分鐘內傳的照片會自動對應。也可以回覆（引用）較早的照片再 @小幫手。一對一聊天直接傳照片就好。
+**How to use**: send a photo in the group, then `@小幫手` with any question ("what's this", "can I eat this", "what is this medicine"); photos sent within two minutes are matched automatically. You can also reply to (quote) an older photo and @ the bot. In a 1-on-1 chat, just send the photo.
 
 ---
 
-## 📋 指令一覽
+## 📋 Commands
 
-在群組裡，訊息要 **@小幫手** 或以「小幫手」開頭，bot 才會回應；一對一聊天則不需要。
+In a group, a message must **@小幫手** or start with 「小幫手」 for the bot to respond; not needed in 1-on-1 chats.
 
-| 指令 | 說明 | 經過 AI? |
+| Command | What it does | Uses AI? |
 |---|---|---|
-| `一蘭 ¥5,200 我付，四人分` | 記帳（句型明確時由程式解析） | 有時 |
-| `成員 小明 小華 阿珍 阿凱` | 登記旅伴（「四人分」時會用到） | ❌ |
-| `帳目` | 列出所有帳目 | ❌ |
-| `結算` | 算出誰該轉給誰 | ❌ |
-| `刪除 #3` | 刪除記錯的帳 | ❌ |
-| `匯率`／`匯率 3000` | 日圓台幣換算 | ❌ |
-| `怎麼說「可以刷卡嗎」` | 救急日文（命中句庫時不經 AI） | 有時 |
-| `記一下：飯店是 xxx` | 新增記事 | ❌ |
-| `記事`／`刪除記事 #2` | 列出或刪除記事 | ❌ |
-| `明天幾點集合？` | 根據記事回答行程問題 | ✅ |
-| 傳照片後 `@小幫手 這啥` | 拍照解說（安全資訊由程式判斷） | ✅ |
-| `新旅程` | 封存本趟的帳目、記事和對話，重新開始 | ❌ |
-| `說明` | 顯示指令列表 | ❌ |
+| `一蘭 ¥5,200 我付，四人分` | Log an expense (parsed by code when the phrasing is clear) | Sometimes |
+| `成員 小明 小華 阿珍 阿凱` | Register travel companions (used by "split four ways") | ❌ |
+| `帳目` | List all expenses | ❌ |
+| `結算` | Work out who pays whom | ❌ |
+| `刪除 #3` | Delete a wrong entry | ❌ |
+| `匯率` / `匯率 3000` | Yen ↔ NT$ conversion | ❌ |
+| `怎麼說「可以刷卡嗎」` | Emergency Japanese (no AI on a phrase-book hit) | Sometimes |
+| `記一下：飯店是 xxx` | Add a note | ❌ |
+| `記事` / `刪除記事 #2` | List or delete notes | ❌ |
+| `明天幾點集合？` | Answer itinerary questions from the notes | ✅ |
+| Send a photo, then `@小幫手 這啥` | Photo explanation (safety info decided by code) | ✅ |
+| `新旅程` | Archive this trip's ledger, notes and chat, and start over | ❌ |
+| `說明` | Show the command list | ❌ |
 
-不經過 AI 的指令會在 1 秒內回覆。
+Commands that skip the AI reply within 1 second.
 
 ---
 
-## 🚀 安裝與啟動
+## 🚀 Install and run
 
-### 需要準備
+### Prerequisites
 
-- [Node.js](https://nodejs.org) 20 以上
+- [Node.js](https://nodejs.org) 20+
 - [Ollama](https://ollama.com)
-- [Python](https://www.python.org) 3.10 以上（拍照解說用的 OCR；不想裝的話可以用 Docker，見「部署」）
-- 一個 [LINE Developers](https://developers.line.biz) 帳號
-- [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/)（讓 LINE 連到你家的電腦）
+- [Python](https://www.python.org) 3.10+ (OCR for photo explanations; or use Docker instead, see [Deployment](#️-deployment))
+- A [LINE Developers](https://developers.line.biz) account
+- [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) (so LINE can reach the computer at home)
 
-### 步驟 1：下載專案並安裝
+### Step 1: clone and install
 
 ```bash
 git clone https://github.com/KJLavender/japan-trip-bot.git
@@ -136,26 +148,26 @@ cd japan-trip-bot
 npm install
 ```
 
-### 步驟 2：下載模型
+### Step 2: pull the model
 
 ```bash
 ollama pull qwen3.5:4b
-npm run setup:model      # 建立 context 16k 的 japan-trip-bot 模型變體
+npm run setup:model      # creates the japan-trip-bot model variant with a 16k context
 ```
 
-> 為什麼要 `setup:model`？Ollama 的 OpenAI 相容介面會忽略 context 設定，預設只有 4096 token，對話一長 system prompt（規則和記事）就會被默默截掉。bot 啟動時會檢查，沒設定好會警告。想換模型請先看「🧪 模型選擇（實測）」。
+> Why `setup:model`? Ollama's OpenAI-compatible API ignores the context setting and defaults to 4096 tokens, so once a chat gets long the system prompt (rules and notes) is silently truncated. The bot checks this at startup and warns if it isn't set up. Before switching models, see [Model choice](#-model-choice-measured).
 
-### 步驟 2.5：啟動 OCR（拍照解說用）
+### Step 2.5: start OCR (for photo explanations)
 
 ```bash
 python -m venv ocr/.venv
-ocr/.venv/bin/pip install -r ocr/requirements.txt        # Windows：ocr\.venv\Scripts\pip ...
-ocr/.venv/bin/python ocr/server.py                        # 另外開一個終端機，第一次會下載約 20 MB 的模型
+ocr/.venv/bin/pip install -r ocr/requirements.txt        # Windows: ocr\.venv\Scripts\pip ...
+ocr/.venv/bin/python ocr/server.py                        # in another terminal; downloads ~20 MB of models the first time
 ```
 
-OCR 只監聽 `127.0.0.1:8001`，用 CPU 跑，一張照片約 0.2 秒。沒有啟動 OCR 的話，照片會改由視覺模型直接看圖，速度較慢、也比較不準。
+OCR listens only on `127.0.0.1:8001` and runs on the CPU, about 0.2 s per photo. Without OCR, photos are read directly by the vision model, which is slower and less accurate.
 
-先不打開 LINE，在本機試玩看看（可以順便確認 Ollama 正常）：
+Try it locally before setting up LINE (also confirms Ollama works):
 
 ```bash
 npm run chat -- 小明
@@ -164,333 +176,333 @@ npm run chat -- 小明
 > 結算
 ```
 
-### 步驟 3：建立 LINE Messaging API channel
+### Step 3: create a LINE Messaging API channel
 
-1. 到 [LINE Developers Console](https://developers.line.biz/console/) 建立一個 Provider，再建立 **Messaging API** channel
-2. 在 **Basic settings** 複製 **Channel secret**
-3. 在 **Messaging API** 分頁最下方發行 **Channel access token (long-lived)**
-4. 到 [LINE Official Account Manager](https://manager.line.biz/) 調整回應設定：
-   - **Allow bot to join group chats**：打開
-   - **Auto-reply messages**：關閉
-   - **Webhooks**：打開
+1. In the [LINE Developers Console](https://developers.line.biz/console/), create a Provider, then a **Messaging API** channel
+2. Under **Basic settings**, copy the **Channel secret**
+3. At the bottom of the **Messaging API** tab, issue a **Channel access token (long-lived)**
+4. In [LINE Official Account Manager](https://manager.line.biz/), adjust the response settings:
+   - **Allow bot to join group chats**: on
+   - **Auto-reply messages**: off
+   - **Webhooks**: on
 
-### 步驟 4：設定 `.env`
+### Step 4: configure `.env`
 
 ```bash
 cp .env.example .env
 ```
 
-填入剛才取得的兩個值：
+Fill in the two values you just got:
 
 ```ini
-LINE_CHANNEL_SECRET=你的 channel secret
-LINE_CHANNEL_ACCESS_TOKEN=你的 access token
+LINE_CHANNEL_SECRET=your channel secret
+LINE_CHANNEL_ACCESS_TOKEN=your access token
 ```
 
-> ⚠️ `.env` 已經被 `.gitignore` 排除，**不要把它 commit 或貼到任何地方**。
+> ⚠️ `.env` is already in `.gitignore`. **Never commit it or paste it anywhere.**
 
-### 步驟 5：啟動 bot 並開通外部連線
+### Step 5: start the bot and open an external connection
 
 ```bash
-npm start                                         # 或 npm run dev（修改程式時會自動重啟）
-cloudflared tunnel --url http://localhost:3000    # 另外開一個終端機
+npm start                                         # or npm run dev (auto-restarts on code changes)
+cloudflared tunnel --url http://localhost:3000    # in another terminal
 ```
 
-cloudflared 會給你一個 `https://xxxx.trycloudflare.com` 網址。到 LINE Developers 的 **Messaging API → Webhook URL** 填入：
+cloudflared gives you a `https://xxxx.trycloudflare.com` URL. In LINE Developers, set **Messaging API → Webhook URL** to:
 
 ```
 https://xxxx.trycloudflare.com/webhook
 ```
 
-按 **Verify** 看到 Success 後，打開 **Use webhook**。
+Click **Verify**, and once you see Success, turn on **Use webhook**.
 
-> 💡 quick tunnel 的網址每次重啟都會改變。長期使用的話，建議設定 [Cloudflare named tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/get-started/) 搭配固定網域。
+> 💡 A quick tunnel's URL changes every restart. For long-term use, set up a [Cloudflare named tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/get-started/) with a fixed domain.
 
-### 步驟 6：把 bot 拉進旅遊群組
+### Step 6: add the bot to your travel group
 
-用 LINE 加 bot 好友（LINE Developers 頁面上有 QR code），再邀請它進群組，輸入 `@小幫手 說明` 試試看。
+Add the bot as a LINE friend (the QR code is on the LINE Developers page), invite it to the group, and try `@小幫手 說明` ("help").
 
 ---
 
-## ⚙️ 設定
+## ⚙️ Configuration
 
-所有設定都在 `.env`，完整列表請看 [`.env.example`](.env.example)。
+All settings live in `.env`; see [`.env.example`](.env.example) for the full list.
 
-| 變數 | 預設值 | 說明 |
+| Variable | Default | Meaning |
 |---|---|---|
-| `OLLAMA_BASE_MODEL` | `qwen3.5:4b` | 基底模型 |
-| `OLLAMA_MODEL` | `japan-trip-bot` | bot 實際呼叫的模型（由 `setup:model` 建立） |
-| `OLLAMA_NUM_CTX` | `16384` | context 長度 |
-| `LLM_TIMEOUT_SECONDS` | `90` | AI 回應逾時 |
-| `OLLAMA_BASE_URL` | `http://localhost:11434/v1` | Ollama 的 OpenAI 相容端點 |
-| `BOT_NAME` | `小幫手` | bot 的名字（判斷有沒有被叫到時會用） |
-| `LLM_PROVIDER` | `ollama` | 聊天大腦：`ollama`（全部在本機）或 `gemini`（聊天內容送 Google，本機 Ollama 自動備援）；照片一律在本機處理 |
-| `PHOTO_USE_CLOUD` | `false` | `true` = 照片也交給 Gemini 解說（照片會送到 Google；失敗時改用本機） |
-| `GEMINI_CHAT_MODEL` | `gemini-3.1-flash-lite` | `LLM_PROVIDER=gemini` 時用的模型（見「聊天大腦比較」）。免費方案的 gemini-3.5-flash 實測每天只有 20 次 |
-| `GEMINI_API_KEY` | （空） | 選用：字典查不到的詞改問 Gemini；留空就關閉 |
-| `GEMINI_DAILY_LIMIT` | `300` | Gemini 每天最多呼叫次數 |
-| `OCR_URL` | `http://127.0.0.1:8001` | OCR 服務位址；留空就不使用 OCR |
-| `VISION_ENABLED` | `true` | OCR 讀不到字時，是否改用視覺模型看圖（模型不支援時會自動關閉） |
-| `IMAGE_WINDOW_MINUTES` | `15` | 群組照片在幾分鐘內可以被解說 |
-| `ALLOW_PUSH_FALLBACK` | `false` | 回覆太慢導致 reply token 過期時，是否改用 push 補送（會用到免費推播額度） |
-| `DATA_DIR` | `data` | 資料存放位置 |
+| `OLLAMA_BASE_MODEL` | `qwen3.5:4b` | Base model |
+| `OLLAMA_MODEL` | `japan-trip-bot` | Model the bot actually calls (created by `setup:model`) |
+| `OLLAMA_NUM_CTX` | `16384` | Context length |
+| `LLM_TIMEOUT_SECONDS` | `90` | AI response timeout |
+| `OLLAMA_BASE_URL` | `http://localhost:11434/v1` | Ollama's OpenAI-compatible endpoint |
+| `BOT_NAME` | `小幫手` | The bot's name (used to detect when it's addressed) |
+| `LLM_PROVIDER` | `ollama` | Chat brain: `ollama` (fully local) or `gemini` (chat content goes to Google, local Ollama as automatic fallback); photos are always processed locally |
+| `PHOTO_USE_CLOUD` | `false` | `true` = photos are also explained by Gemini (photos go to Google; falls back to local on failure) |
+| `GEMINI_CHAT_MODEL` | `gemini-3.1-flash-lite` | Model used when `LLM_PROVIDER=gemini` (see the chat-brain comparison). On the free tier, gemini-3.5-flash measured only 20 calls/day |
+| `GEMINI_API_KEY` | (empty) | Optional: ask Gemini about words the dictionaries don't know; empty = off |
+| `GEMINI_DAILY_LIMIT` | `300` | Max Gemini calls per day |
+| `OCR_URL` | `http://127.0.0.1:8001` | OCR service address; empty = no OCR |
+| `VISION_ENABLED` | `true` | Fall back to the vision model when OCR finds no text (auto-disabled if the model can't see images) |
+| `IMAGE_WINDOW_MINUTES` | `15` | How many minutes a group photo can still be explained |
+| `ALLOW_PUSH_FALLBACK` | `false` | When a slow reply lets the reply token expire, send it as a push message instead (uses your free push quota) |
+| `DATA_DIR` | `data` | Where data is stored |
 
-想修改 bot 的個性或規則，直接編輯 [`AGENTS.md`](AGENTS.md)（它就是 system prompt），每則訊息都會重新讀取，不需要重啟。
+To change the bot's personality or rules, edit [`AGENTS.md`](AGENTS.md) (it *is* the system prompt). It's re-read on every message, no restart needed.
 
 ---
 
-## 🧪 模型選擇（實測）
+## 🧪 Model choice (measured)
 
-不同模型的差異很大，**新模型不一定比較好**。下表是用 `npm run eval` 實測的結果。測試題目是這個 bot 的實際任務，不是一般的考試題：
+Models differ a lot, and **newer isn't necessarily better**. The table below comes from `npm run eval`. The test questions are this bot's real tasks, not a generic benchmark:
 
-- **記帳**：只有規則解析器處理不了的口語說法（例如「一萬八」「跟小華對分」「X 請大家」），所以考的是模型本身
-- **記事問答**：從記事找出日期、代號、時間；記事裡沒有的資訊要說沒有；記事裡夾帶的提示詞注入不能照做
-- **照片解說**：給 OCR 文字，檢查解說內容（不含程式產生的安全資訊）
+- **Expense logging**: only the casual phrasings the rule parser can't handle (e.g. 「一萬八」, 「跟小華對分」, 「X 請大家」 "X treats everyone"), so it tests the model itself
+- **Note Q&A**: find dates, codes and times in the notes; say so when the notes don't contain the answer; don't follow prompt injection hidden in a note
+- **Photo explanation**: given OCR text, check the explanation (excluding the code-generated safety info)
 
-測試日期：2026-10-02｜RTX 3060 Ti 8GB｜每個模型跑 3 次取平均｜context 16k
+Tested 2026-10-02 | RTX 3060 Ti 8GB | average of 3 runs per model | 16k context
 
-| 模型 | 記帳 | 記事問答 | 照片解說 | 總分 | 平均回應 | 評價 |
+| Model | Expenses | Note Q&A | Photos | Total | Avg. response | Verdict |
 |---|---|---|---|---|---|---|
-| **qwen3.5:4b**（預設） | 93% | 100% | 100% | **97%** | 1.5s | ⭐⭐⭐⭐ 推薦。支援看圖，VRAM 約 3.6 GB |
-| qwen3:4b | 87% | 50% | 100% | 79% | 14.9s | ⭐⭐ 會把思考過程寫進回覆，而且常逾時 |
-| qwen2.5:7b | 27% | 92% | 75% | 62% | 2.6s | ⭐⭐ 會把工具呼叫寫成文字，幾乎無法口語記帳 |
-| llama3.2:1b | 13% | 33% | 8% | 18% | 1.0s | ⭐ 不建議 |
+| **qwen3.5:4b** (default) | 93% | 100% | 100% | **97%** | 1.5s | ⭐⭐⭐⭐ Recommended. Can see images, ~3.6 GB VRAM |
+| qwen3:4b | 87% | 50% | 100% | 79% | 14.9s | ⭐⭐ Leaks its reasoning into replies and often times out |
+| qwen2.5:7b | 27% | 92% | 75% | 62% | 2.6s | ⭐⭐ Writes tool calls as text; casual expense logging barely works |
+| llama3.2:1b | 13% | 33% | 8% | 18% | 1.0s | ⭐ Not recommended |
 
-- 要注意的是，表格裡「記帳」只測口語說法。實際使用時，明確的說法（「燒肉 18000 円 阿凱付，大家分」）由程式處理，任何模型都是 100%
-- 題目數量不多（13 題 × 3 次），只能當作參考。有更大的顯示卡的話，歡迎用 `npm run eval -- <模型>` 測試並分享結果
-- 換模型的方法：在 `.env` 設定 `OLLAMA_BASE_MODEL=<模型>`，再執行 `npm run setup:model`
+- Note that "Expenses" only tests casual phrasings. In real use, clear phrasings (「燒肉 18000 円 阿凱付，大家分」 "Yakiniku ¥18,000, Akai paid, everyone splits") are handled by code, so every model scores 100%
+- The question set is small (13 questions × 3 runs), so treat it as a reference. If you have a bigger GPU, try `npm run eval -- <model>` and share the results
+- To switch models: set `OLLAMA_BASE_MODEL=<model>` in `.env`, then run `npm run setup:model`
 
-### 聊天大腦比較（`npm run eval:models`，測資來自網路）
+### Chat brain comparison (`npm run eval:models`, test data from the web)
 
-測資用 `npm run fetch:eval-data` 從網路下載並放在 `test/data/`：[Tatoeba](https://tatoeba.org) 的中日旅遊例句（CC BY 2.0 FR，58 句，含多種人工翻譯）、[Wikidata](https://www.wikidata.org) 的日本景點資料（CC0，所在縣市 12 題、建築高度 8 題；有爭議的創建年份刻意不出題）。評測時關閉自動備援，模型失敗就算錯。
+The test data is downloaded with `npm run fetch:eval-data` into `test/data/`: Chinese–Japanese travel sentences from [Tatoeba](https://tatoeba.org) (CC BY 2.0 FR, 58 sentences with multiple human translations) and Japanese landmark facts from [Wikidata](https://www.wikidata.org) (CC0; 12 prefecture questions, 8 building-height questions; disputed founding years are deliberately left out). Automatic fallback is disabled during evaluation, so a model failure counts as wrong.
 
-測試日期：2026-10-03｜每個模型跑 1 次
+Tested 2026-10-03 | 1 run per model
 
-| 模型 | 記帳 | 記事問答 | 日文翻譯（chrF） | 景點知識 答對／**亂編**／不知道 | 照片解說* | 平均回應 |
+| Model | Expenses | Note Q&A | Japanese translation (chrF) | Landmark facts correct / **made up** / don't know | Photos* | Avg. response |
 |---|---|---|---|---|---|---|
-| qwen3.5:4b（本機） | 60% | 100% | 40 | 11／**9**／0 | 63% | 4.5s |
-| gemini-3.5-flash-lite | 100% | 100% | 43 | 13／**7**／0 | 44% | 2.8s |
-| **gemini-3.1-flash-lite**（目前使用） | **100%** | **100%** | **60** | **20／0／0** | **88%** | 4.9s |
-| gemma-4-26b | 100% | 75% | 37 | 13／**7**／0 | 44% | 4.5s |
-| gemma-4-31b | 60% | 100% | 41 | 11／**9**／0 | 69% | 3.8s |
+| qwen3.5:4b (local) | 60% | 100% | 40 | 11 / **9** / 0 | 63% | 4.5s |
+| gemini-3.5-flash-lite | 100% | 100% | 43 | 13 / **7** / 0 | 44% | 2.8s |
+| **gemini-3.1-flash-lite** (in use) | **100%** | **100%** | **60** | **20 / 0 / 0** | **88%** | 4.9s |
+| gemma-4-26b | 100% | 75% | 37 | 13 / **7** / 0 | 44% | 4.5s |
+| gemma-4-31b | 60% | 100% | 41 | 11 / **9** / 0 | 69% | 3.8s |
 
-*照片解說：雲端模型的分數是讓它們看照片量到的。正式 bot 預設照片只在本機處理；設定 `PHOTO_USE_CLOUD=true` 才會讓 Gemini 看照片。
+*Photos: cloud models were scored by letting them see the photos. The production bot processes photos locally by default; Gemini only sees photos when `PHOTO_USE_CLOUD=true`.
 
-- 景點知識的差距最大：qwen 說靖國神社在北海道、首里城在島根縣；3.1 Flash Lite 20 題全對、沒有亂編
-- 較新的 3.5 Flash Lite 反而比 3.1 差，**換模型前一定要實測**
-- 知識題的分數經過人工複核（評分程式原本把「203.65 公尺」讀成 65，已修正）
+- Landmark knowledge shows the biggest gap: qwen placed Yasukuni Shrine in Hokkaido and Shuri Castle in Shimane; 3.1 Flash Lite got all 20 right and made nothing up
+- The newer 3.5 Flash Lite did worse than 3.1 — **always measure before switching models**
+- Knowledge scores were manually reviewed (the grader originally read "203.65 m" as 65; fixed)
 
-### 真實照片評測（`npm run eval:photos`）
+### Real-photo evaluation (`npm run eval:photos`)
 
-用 9 張網路上 CC 授權的真實照片（手寫菜單、反光菜單、直書招牌、壽司點餐單、食券機、藥妝店、車站停駛告示、兩張沒有文字的照片）測試拍照解說。照片不放進 repo，評測時才從原始出處下載（出處與授權見 [`test/photo-cases.json`](test/photo-cases.json)）。
+Photo explanations were tested on CC-licensed real photos from the web (handwritten menus, glare on menus, vertical signboards, sushi order sheets, ticket machines, a drugstore, a station service-suspension notice, two photos with no text). The photos aren't in the repo; they're downloaded from their original sources at evaluation time (sources and licenses in [`test/photo-cases.json`](test/photo-cases.json)).
 
-照片分成兩組：**調整組**（9 張，開發時一邊看一邊修辭典和 prompt）和**驗收組**（7 張，從來不拿來調整）。**驗收組的分數才是真實水準。**
+The photos are split into a **tuning set** (9 photos, used while adjusting dictionaries and prompts) and a **holdout set** (7 photos, never used for tuning). **Only the holdout score reflects real quality.**
 
-測試日期：2026-10-03｜RTX 3060 Ti 8GB｜每張照片跑 3 次
+Tested 2026-10-03 | RTX 3060 Ti 8GB | 3 runs per photo
 
-| 做法 | 驗收組正確率 | 平均時間 | 結論 |
+| Approach | Holdout accuracy | Avg. time | Conclusion |
 |---|---|---|---|
-| **目前的做法**：OCR + 程式判斷安全資訊 + 三層字典（手寫 → Wikidata → Gemini）+ qwen3.5:4b 同時看照片，照片解說使用專用 prompt、不帶入聊天紀錄 | **57%** | **3.2s** | ✅ 採用 |
-| 同上，但帶入聊天紀錄 | 67～71% | 21～25s | ❌ 太慢；而且分數是灌水的（同一張照片重複作答時，模型看得到自己前一次的答案） |
-| 早期版本：OCR + qwen3.5:4b 只看文字，共用聊天的 system prompt | 39%（調整組） | — | 聊天規則干擾照片解說，例如把壽司店說成「一蘭拉麵」 |
-| qwen3.5:4b 直接看圖（不用 OCR） | 56%（調整組） | — | 安全資訊沒辦法由程式把關 |
-| gemma3:4b 直接看圖 | 6%（調整組） | — | 會編造內容（把羽田空港說成「天國寺機場」） |
-| qwen2.5vl:7b、qwen3-vl:8b | — | >3 分鐘 | 8GB 顯示卡實際只剩約 5.5GB 可用，模型放不下，一部分得用 CPU 跑 |
+| **Current approach**: OCR + code-decided safety info + three-tier dictionary (curated → Wikidata → Gemini) + qwen3.5:4b also sees the photo; photo explanations use a dedicated prompt without chat history | **57%** | **3.2s** | ✅ Adopted |
+| Same, but with chat history included | 67–71% | 21–25s | ❌ Too slow, and the score is inflated (on repeated runs of the same photo, the model sees its own previous answer) |
+| Early version: OCR + qwen3.5:4b on text only, sharing the chat system prompt | 39% (tuning set) | — | Chat rules interfered with photo explanations, e.g. calling a sushi shop "Ichiran Ramen" |
+| qwen3.5:4b reading the image directly (no OCR) | 56% (tuning set) | — | Safety info can't be enforced by code |
+| gemma3:4b reading the image directly | 6% (tuning set) | — | Makes things up (called Haneda Airport "Tengoku-ji Airport") |
+| qwen2.5vl:7b, qwen3-vl:8b | — | >3 min | An 8GB card has only ~5.5GB usable; the model doesn't fit and part of it runs on the CPU |
 
-Gemini 字典備援在同條件下讓驗收組從 67% 提升到 71%（帶入聊天紀錄的設定），幫助有限但有效。
+Under the same conditions, the Gemini dictionary fallback raised the holdout score from 67% to 71% (with chat history) — a small but real improvement.
 
-學到的事：
+Lessons learned:
 
-- **OCR 的信心分數不可靠**：直書和手寫字常常「很有信心地讀錯」，所以不能用信心分數決定要不要看圖，現在一律讓模型同時看照片
-- **安全資訊仍然只由程式從 OCR 文字判斷**；模型看圖可能會編造照片上沒有的字
-- **模型會編造價格**：沒有標價的招牌也寫出「580円」。現在只要回覆裡的價格在 OCR 文字中找不到，就會附上警語
-- **模型會無視長度限制**：prompt 寫「最多 12 行」，實際寫 18～72 行。現在由程式限制輸出長度
-- **照片解說不需要聊天紀錄**：帶入紀錄會讓 prompt 膨脹到上萬 token，回覆從 3 秒拖到 20 秒以上
-- 驗收組常錯的例子：把「鯛焼」（鯛魚燒）讀成「鰻焼」、把「活平目」（比目魚）說成鯛魚，這些是 4b 模型的能力上限
+- **OCR confidence scores are unreliable**: vertical and handwritten text is often "confidently misread", so confidence can't decide whether to look at the image; the model now always sees the photo too
+- **Safety info is still decided only by code from the OCR text**; a model looking at the image may invent text that isn't there
+- **Models invent prices**: they wrote "580円" for a sign with no price. Now, if a price in the reply can't be found in the OCR text, a warning is attached
+- **Models ignore length limits**: the prompt said "at most 12 lines" and they wrote 18–72. Output length is now enforced by code
+- **Photo explanations don't need chat history**: including it bloats the prompt to over ten thousand tokens and stretches replies from 3 s to over 20 s
+- Typical holdout errors: reading 「鯛焼」 (taiyaki) as 「鰻焼」, calling 「活平目」 (flounder) sea bream — the limits of a 4B model
 
 ---
 
-## 🏗 架構
+## 🏗 Architecture
 
-設計原則：**能用規則處理的就不交給 AI**。AI 只負責「理解口語」和「把查證過的事實講成白話」。
+Design principle: **if a rule can handle it, don't hand it to the AI**. The AI only "understands casual language" and "explains verified facts in plain words".
 
 ```
-文字 ─▶ handler：固定指令 / 記帳規則解析 / 日文句庫 ──命中──▶ 直接回覆（不經 AI）
-              │ 沒命中
+text ─▶ handler: fixed commands / expense rule parser / Japanese phrase book ──hit──▶ reply directly (no AI)
+              │ miss
               ▼
-        agent（Pi Agent + Ollama）──▶ 工具（記帳、記事…），工具結果就是最終回覆
+        agent (Pi Agent + Ollama) ──▶ tools (expenses, notes…); the tool result is the final reply
               │
               ▼
-        防呆：沒呼叫工具卻說「已記帳」→ 攔下；台幣金額由程式重算；移除 Markdown
+        guards: claims "logged" without a tool call → blocked; NT$ amounts recomputed by code; Markdown stripped
 
-照片 ─▶ OCR（ocr/server.py）─▶ 分類 ─▶ 程式偵測過敏原/酒精/藥品 + 查知識庫 ─▶ 專用 prompt ─▶ agent
+photo ─▶ OCR (ocr/server.py) ─▶ classify ─▶ code detects allergens/alcohol/medicine + knowledge base ─▶ dedicated prompt ─▶ agent
 ```
 
-| 檔案 | 用途 |
+| File | Purpose |
 |---|---|
-| `src/index.ts` | LINE webhook：簽章驗證、@mention 判斷、加入/離開群組、照片對應 |
-| `src/handler.ts` | 固定指令的 fast path、發話者對應（含改名追蹤） |
-| `src/expense-parser.ts` | 記帳句子的規則解析器（說法不明確時交給 AI） |
-| `src/agent.ts` | 每個群組一個 Pi Agent session；記事注入、逾時、防呆與回覆後處理 |
-| `src/tools.ts` | Agent 工具：`add_expense`、`settle_up`、`fx_rate`、`japanese_phrase`、`memo_add` 等 |
-| `src/photo.ts` | 拍照解說：照片對應、分類、組合安全資訊與知識庫、專用 prompt |
-| `src/knowledge/` | 人工整理的知識庫：`safety.ts`（過敏原、酒精、藥品）、`glossary.ts`（用語、料理、神社） |
-| `src/ocr.ts`、`ocr/server.py` | OCR 用戶端與服務（RapidOCR + PP-OCRv5） |
-| `src/ledger.ts` | 帳本與結算演算法（貪婪法，最多 n−1 次轉帳） |
-| `src/phrases.ts` | 人工校對的旅遊日文句庫 |
-| `src/memo.ts` | 行程記事 |
-| `src/fx.ts` | 匯率查詢，以及把回覆中的台幣金額改成程式計算的結果 |
-| `src/llm-health.ts` | Ollama 健康檢查、模型能力與 context 長度檢查 |
-| `src/store.ts` | JSON 檔案儲存（原子寫入、路徑安全處理） |
+| `src/index.ts` | LINE webhook: signature verification, @mention detection, join/leave group, photo matching |
+| `src/handler.ts` | Fast path for fixed commands, sender mapping (including name-change tracking) |
+| `src/expense-parser.ts` | Rule parser for expense messages (unclear phrasing goes to the AI) |
+| `src/agent.ts` | One Pi Agent session per group; note injection, timeouts, guards and reply post-processing |
+| `src/tools.ts` | Agent tools: `add_expense`, `settle_up`, `fx_rate`, `japanese_phrase`, `memo_add`, etc. |
+| `src/photo.ts` | Photo explanations: photo matching, classification, combining safety info with the knowledge base, dedicated prompts |
+| `src/knowledge/` | Hand-curated knowledge base: `safety.ts` (allergens, alcohol, medicine), `glossary.ts` (terms, dishes, shrines) |
+| `src/ocr.ts`, `ocr/server.py` | OCR client and service (RapidOCR + PP-OCRv5) |
+| `src/ledger.ts` | Ledger and settlement algorithm (greedy, at most n−1 transfers) |
+| `src/phrases.ts` | Human-checked travel Japanese phrase book |
+| `src/memo.ts` | Trip notes |
+| `src/fx.ts` | Exchange rates, and replacing NT$ amounts in replies with code-computed values |
+| `src/llm-health.ts` | Ollama health check, model capability and context-length checks |
+| `src/store.ts` | JSON file storage (atomic writes, safe paths) |
 | `AGENTS.md` | System prompt |
 
-資料以 JSON 存在 `data/`，分成 `ledgers/`、`memos/`、`sessions/` 和 `archive/`。
+Data is stored as JSON under `data/`, split into `ledgers/`, `memos/`, `sessions/` and `archive/`.
 
 ---
 
-## ☁️ 部署
+## ☁️ Deployment
 
-上面「安裝與啟動」的做法（家裡電腦加 Cloudflare quick tunnel）適合**開發、測試和朋友試用**。如果想讓 bot 全天候運作，建議依需求選擇下面的架構。
+The setup in [Install and run](#-install-and-run) (home computer + Cloudflare quick tunnel) is good for **development, testing and letting friends try it**. To keep the bot running around the clock, pick one of the architectures below.
 
-### 架構 A：家裡一台機器全包（Docker Compose）
-
-```bash
-cp .env.example .env              # 填入 LINE 的兩個值
-docker compose up -d              # bot 連到宿主機上的 Ollama
-docker compose --profile ollama up -d   # 或：Ollama 也放進容器（需要 NVIDIA Container Toolkit）
-```
-
-- 容器以非 root 使用者執行，根目錄唯讀、移除所有 Linux capabilities，只有 `data/` 可以寫入
-- port 只綁 `127.0.0.1`，對外請透過 Cloudflare Tunnel（建議用 named tunnel，網址才不會變）
-
-### 架構 B（推薦正式使用）：bot 放雲端、模型放家裡
-
-```
-LINE ──▶ 雲端 VM（bot + data）──Tailscale 私有網路──▶ 家裡電腦（Ollama + GPU）
-```
-
-- 雲端 VM 可以用 Oracle Cloud Always Free 這類免費或低價方案，只跑 bot，不需要 GPU
-- **家裡電腦關機時，bot 仍然在線**：結算、帳目、記事、匯率、日文句庫都不經過 AI，照常可以用；AI 功能會回覆「暫時離線」
-- 兩邊都安裝 [Tailscale](https://tailscale.com)，在 VM 的 `.env` 設定 `OLLAMA_BASE_URL=http://<家裡電腦的 Tailscale IP>:11434/v1`
-
-> ⚠️ **Ollama 沒有任何驗證機制，絕對不要把 11434 port 開放到公網或路由器的 port forwarding。** 任何人連得到就能使用你的 GPU、下載或刪除模型。請只透過 Tailscale 這類私有網路連線，並讓 Ollama 只監聽 `127.0.0.1` 或 Tailscale 介面，不要用 `0.0.0.0`。
-
-### 架構 A'：家裡一台機器 + Tailscale Funnel（固定網址、免費、不用網域）
-
-Cloudflare quick tunnel 每次重啟網址都會變。[Tailscale Funnel](https://tailscale.com/kb/1223/funnel) 會給一個固定的 `https://<主機名>.<tailnet>.ts.net` 網址，免費、不用買網域：
+### Architecture A: one machine at home does everything (Docker Compose)
 
 ```bash
-# 在跑 Docker 的 Linux／WSL 裡
+cp .env.example .env              # fill in the two LINE values
+docker compose up -d              # the bot connects to Ollama on the host
+docker compose --profile ollama up -d   # or: run Ollama in a container too (needs NVIDIA Container Toolkit)
+```
+
+- The container runs as a non-root user with a read-only root filesystem and all Linux capabilities dropped; only `data/` is writable
+- Ports bind only to `127.0.0.1`; expose it through a Cloudflare Tunnel (a named tunnel keeps the URL stable)
+
+### Architecture B (recommended for real use): bot in the cloud, model at home
+
+```
+LINE ──▶ cloud VM (bot + data) ──Tailscale private network──▶ home computer (Ollama + GPU)
+```
+
+- The cloud VM can be a free or cheap plan like Oracle Cloud Always Free; it only runs the bot and needs no GPU
+- **The bot stays online when the home computer is off**: settling up, the ledger, notes, exchange rates and the phrase book don't use the AI and keep working; AI features reply "temporarily offline"
+- Install [Tailscale](https://tailscale.com) on both, and set `OLLAMA_BASE_URL=http://<home computer's Tailscale IP>:11434/v1` in the VM's `.env`
+
+> ⚠️ **Ollama has no authentication. Never expose port 11434 to the internet or forward it on your router.** Anyone who can reach it can use your GPU and download or delete models. Connect only over a private network like Tailscale, and have Ollama listen only on `127.0.0.1` or the Tailscale interface — not `0.0.0.0`.
+
+### Architecture A′: one machine at home + Tailscale Funnel (fixed URL, free, no domain)
+
+A Cloudflare quick tunnel's URL changes on every restart. [Tailscale Funnel](https://tailscale.com/kb/1223/funnel) gives you a fixed `https://<hostname>.<tailnet>.ts.net` URL for free, no domain needed:
+
+```bash
+# in the Linux / WSL environment running Docker
 docker build -t japan-trip-bot . && docker build -t japan-trip-bot-ocr ocr
 docker network create jtb-net
 docker run -d --name jtb-ocr --restart unless-stopped --network jtb-net -p 127.0.0.1:8001:8001   --read-only --tmpfs /tmp --cap-drop ALL japan-trip-bot-ocr
 docker run -d --name jtb-bot --restart unless-stopped --network host --env-file .env   -e HOST=127.0.0.1 -e OLLAMA_BASE_URL=http://127.0.0.1:11434/v1 -e OCR_URL=http://127.0.0.1:8001 -e DATA_DIR=/app/data   -v /var/lib/japan-trip-bot:/app/data --read-only --tmpfs /tmp --cap-drop ALL japan-trip-bot
-tailscale funnel --bg 3000      # 第一次會給一個網址，到 Tailscale 後台按 Enable
+tailscale funnel --bg 3000      # the first run prints a URL; click Enable in the Tailscale admin console
 ```
 
-把 `https://<主機名>.<tailnet>.ts.net/webhook` 貼到 LINE 的 Webhook 網址。容器設定了 `--restart unless-stopped`，只要 Docker 開機自動啟動，bot 就會自己起來。Funnel 只公開 bot 的 3000 port；OCR 與 Ollama 都不對外。
+Paste `https://<hostname>.<tailnet>.ts.net/webhook` into LINE's Webhook URL. The containers use `--restart unless-stopped`, so as long as Docker starts on boot, the bot comes back by itself. Funnel exposes only the bot's port 3000; OCR and Ollama stay private.
 
-> 為什麼 bot 用 `--network host`？在 WSL 的 mirrored 網路模式下，Docker 橋接網路對外連線時好時壞（實測連 `api.line.me` 逾時，bot 就沒辦法回覆訊息），共用主機網路才穩定。也因為共用主機網路，一定要設定 `HOST=127.0.0.1`，否則區網裡的其他裝置也連得到 bot。
+> Why `--network host` for the bot? In WSL's mirrored networking mode, outbound connections from Docker's bridge network are flaky (connections to `api.line.me` timed out in testing, so the bot couldn't reply); sharing the host network is stable. Because it shares the host network, you must set `HOST=127.0.0.1`, otherwise other devices on your LAN can reach the bot.
 
-### 架構 C：長期（Homelab）
+### Architecture C: long-term (Homelab)
 
-如果你本來就有 K3s 或 Kubernetes，可以把 bot、Ollama、監控（Grafana、Loki）放在同一套基礎設施上。單純跑這個 bot 的話，Docker Compose 就夠用了。
+If you already run K3s or Kubernetes, you can put the bot, Ollama and monitoring (Grafana, Loki) on the same infrastructure. For just this bot, Docker Compose is enough.
 
-### 費用與維護
+### Cost and maintenance
 
-- 家裡電腦全天候開機（以 RTX 3060 Ti 等級的桌機估算），一個月大約 50～70 度電、NT$150～250。建議只在旅行期間開 AI
-- 定期備份：`npm run backup` 會把 `data/` 複製到 `backups/<時間>/`
-- Render、Railway 這類平台的免費方案通常**沒有永久硬碟**，重啟後資料會消失，不適合直接放這個 bot
-
----
-
-## 🔒 資安設計
-
-- **Webhook 簽章驗證**：每個請求都會用 Channel secret 驗證 `x-line-signature`，失敗回 401，不會洩漏錯誤細節
-- **機密不進版控**：token 只從環境變數或 `.env` 讀取；`.env` 和 `data/`（含群組 ID、成員名字、帳目）都在 `.gitignore` 裡
-- **路徑安全**：寫檔用的 chatId 只接受英數字，其他一律雜湊，避免路徑穿越
-- **工具權限最小化**：agent 只能讀寫自己群組的帳本和記事，沒有執行指令、讀任意檔案或上網的工具
-- **提示詞注入防護**：記事內容和照片上的 OCR 文字都會標示為「資料而不是指令」；算錢和安全資訊的判斷不經過 AI，就算被注入也改不了
-- **照片隱私**：OCR 一律在本機執行；照片不會存檔，對話紀錄裡的圖片也會移除。預設照片不會送到外部服務；設定 `LLM_PROVIDER=gemini` 且 `PHOTO_USE_CLOUD=true` 時，**照片會送給 Gemini 解說**（評測正確率 63% → 88%），過敏原、酒精、藥品等安全資訊仍只由本機程式判斷
-- **Gemini 聊天大腦（選用、預設關閉）**：設定 `LLM_PROVIDER=gemini` 後，**群組裡對 bot 說的話（含成員名字、金額、記事內容）會送到 Google**；照片仍只在本機處理。Gemini 失敗或額度用完時自動改用本機模型
-- **Gemini 字典（選用、預設關閉）**：只送出「照片上讀到、而且本機字典查不到的日文片段」（例如「もつ鍋」），不送照片、聊天內容或成員名字；查過的詞存在本機，不會重複送出。藥品照片不使用 Gemini。⚠️ Gemini 免費方案的內容可能被 Google 用來改進產品並由人工審閱，介意的話請不要設定 `GEMINI_API_KEY`。API key 放在 HTTP header，不會出現在網址或紀錄裡
-- **資源限制**：訊息上限 1,000 字、照片上限 8 MB、每個群組最多排隊 3 則、全部群組合計最多 8 則、記事上限 100 則、AI 回應逾時 90 秒
-- **容器強化**：bot 和 OCR 都以非 root 執行、唯讀根目錄、移除所有 capabilities、`no-new-privileges`；bot 的 port 只綁 127.0.0.1，OCR 不對外開 port；OCR 模型在建置時下載，執行時不需要連網
-- **資料完整性**：寫檔採用「先寫暫存檔再改名」的原子寫入，當機也不會留下寫到一半的帳本
-- **依賴套件**：CI 每次都會跑 `npm audit`，並已開啟 Dependabot 警示。transitive 依賴 `basic-ftp` 的已知漏洞已透過 `overrides` 升級修補
-
-發現資安問題時，請透過 GitHub 的 [Security Advisories](https://github.com/KJLavender/japan-trip-bot/security/advisories/new) 私下回報，不要開公開 issue。
+- Running the home computer 24/7 (estimated for an RTX 3060 Ti–class desktop) uses about 50–70 kWh a month, roughly NT$150–250. Consider enabling the AI only while traveling
+- Back up regularly: `npm run backup` copies `data/` to `backups/<timestamp>/`
+- Free tiers on platforms like Render and Railway usually **have no persistent disk**, so data disappears on restart — not suitable for this bot as-is
 
 ---
 
-## ⚠️ 已知限制
+## 🔒 Security
 
-請在使用前了解以下限制。依影響程度排序：
+- **Webhook signature verification**: every request's `x-line-signature` is verified with the Channel secret; failures return 401 without leaking error details
+- **No secrets in version control**: tokens are read only from environment variables or `.env`; `.env` and `data/` (group IDs, member names, expenses) are in `.gitignore`
+- **Safe paths**: chatIds used in file names accept only alphanumerics; anything else is hashed, preventing path traversal
+- **Least-privilege tools**: the agent can only read and write its own group's ledger and notes; it has no tools to run commands, read arbitrary files or access the web
+- **Prompt-injection defense**: note contents and OCR text from photos are marked as "data, not instructions"; money and safety decisions don't go through the AI, so injection can't change them
+- **Photo privacy**: OCR always runs locally; photos aren't saved, and images are removed from the chat history. By default photos never go to external services; with `LLM_PROVIDER=gemini` and `PHOTO_USE_CLOUD=true`, **photos are sent to Gemini for explanation** (evaluation accuracy 63% → 88%), while allergen, alcohol and medicine safety info is still decided only by local code
+- **Gemini chat brain (optional, off by default)**: with `LLM_PROVIDER=gemini`, **what group members say to the bot (including member names, amounts and note contents) is sent to Google**; photos are still processed locally. If Gemini fails or runs out of quota, the bot falls back to the local model
+- **Gemini dictionary (optional, off by default)**: only "Japanese fragments read from a photo that the local dictionaries don't know" (e.g. 「もつ鍋」) are sent — no photos, chat content or member names; looked-up words are cached locally and never re-sent. Medicine photos never use Gemini. ⚠️ Content sent to Gemini's free tier may be used by Google to improve its products and reviewed by humans; if that concerns you, don't set `GEMINI_API_KEY`. The API key goes in an HTTP header, never in URLs or logs
+- **Resource limits**: messages up to 1,000 characters, photos up to 8 MB, at most 3 queued messages per group and 8 across all groups, at most 100 notes, 90-second AI timeout
+- **Container hardening**: the bot and OCR both run as non-root with read-only root filesystems, all capabilities dropped and `no-new-privileges`; the bot's port binds only to 127.0.0.1 and OCR exposes no port; OCR models are downloaded at build time, so no network is needed at runtime
+- **Data integrity**: files are written atomically (write a temp file, then rename), so a crash never leaves a half-written ledger
+- **Dependencies**: CI runs `npm audit` on every build, and Dependabot alerts are enabled. A known vulnerability in the transitive dependency `basic-ftp` is patched via `overrides`
 
-### 1. AI 仍然可能出錯（幻覺）
-
-- **醫療、藥品與過敏資訊僅供參考，請以包裝原文與藥師、店員的說明為準。** 程式只能偵測知識庫裡列出的寫法；換一種寫法、或照片上沒寫的成分，就偵測不到。偵測不到不代表沒有
-- 照片的解說內容由 AI 撰寫，可能翻錯料理名稱、漏掉資訊，甚至編造照片上沒有的價格（沒看過的真實照片實測正確率約 57%）。每則照片回覆都會附上提醒；價格對不上 OCR 時會額外警告
-- 句庫以外的日文由 AI 翻譯，可能不正確，回覆會附上警語
-- 口語化的記帳（例如「一萬八」「跟小華對分」）要靠 AI 理解，可能記錯人或記錯金額，記完請看一下確認訊息；AI 如果沒有真的記帳卻說「已記帳」，bot 會攔下來
-
-### 2. 模型品質決定體驗
-
-- 預設的 `qwen3.5:4b` 是在 8GB 顯示卡上能流暢執行的折衷選擇，實測總分 97%，但測試題目不多，實際使用仍可能出錯（見「模型選擇（實測）」）
-- 換模型前請先跑 `npm run eval` 比較；新模型不一定比較好，例如有些模型會把工具呼叫寫成文字，導致完全無法記帳
-
-### 3. 知識庫的範圍有限
-
-- 料理辭典約 60 項、用語約 80 項，遇到地方料理或少見的用語，解說品質會下降
-- 歡迎發 PR 補充 `src/knowledge/`（請附上來源或確認方式）
-
-### 4. 多人同時使用要排隊
-
-- 所有群組共用同一個 Ollama，一次處理一則 AI 請求。一則約 1～10 秒，大家同時拍照時，後面的人要等
-- 每個群組最多排隊 3 則、全部合計 8 則，超過時會請大家稍等
-- 不經 AI 的指令（結算、記事、句庫、明確的記帳）不受影響
-
-### 5. 照片
-
-- OCR 常讀錯手寫、直書、反光的字，模型會同時看照片補正，但直書招牌、食券機這類照片仍然容易出錯
-- 8GB 顯示卡跑不動 7B 以上的看圖模型（見「真實照片評測」），本機能用的模型知識有限，例如不認得魚翅、會把神籤認成注連繩
-- 菜單上只有圖片沒有文字的品項，無法解說
-
-### 6. 記事變多時
-
-- 所有記事都會放進 AI 的 context（上限 100 則）。記事很多時，小模型可能找不到正確的那一則。之後會改成結構化行程（第幾天、時間、地點），讓「第三天住哪」這類問題直接查資料
-
-### 7. LINE 平台限制
-
-- LINE 未認證的帳號無法取得群組成員名單，所以要用「成員 …」登記，或讓每個人至少跟 bot 講過一次話
-- 有人改 LINE 名稱時，bot 要在他下次講話時才會更新帳本上的名字
-- bot 被踢出群組後資料會保留；重新邀請進同一個群組會接續原本的帳本
-- 回覆有時效（reply token），AI 太慢時可能回覆失敗，可以視需要開啟 `ALLOW_PUSH_FALLBACK`（會用到每月免費推播額度）
-
-### 8. 運作成本
-
-- 「免費」的前提是你自己有電腦、電費和網路。全天候開機的電費和備份方式請見「部署」章節
-- 只放家裡電腦的話，電腦關機時 bot 就完全無法使用；建議改用「架構 B」
-
-### 9. 尚未提供
-
-- 交通轉乘查詢：日本的電車資料受授權限制，Google Maps API 查不到大眾運輸路線。之後會用人工整理的常見路線加上 Google Maps 連結
+If you find a security issue, please report it privately via GitHub [Security Advisories](https://github.com/KJLavender/japan-trip-bot/security/advisories/new) rather than opening a public issue.
 
 ---
 
-## 🧪 開發
+## ⚠️ Known limitations
+
+Please understand these before using the bot. Ordered by impact:
+
+### 1. The AI can still be wrong (hallucination)
+
+- **Medical, medicine and allergy information is for reference only; always go by the original packaging and what the pharmacist or staff tell you.** Code can only detect wordings listed in the knowledge base; a different wording, or an ingredient not printed on the photo, won't be detected. Not detected doesn't mean not present
+- Photo explanations are written by the AI and may mistranslate dish names, miss information, or even invent prices that aren't on the photo (about 57% accuracy on real photos it had never seen). Every photo reply includes a reminder, with an extra warning when prices don't match the OCR
+- Japanese outside the phrase book is translated by the AI and may be wrong; replies include a warning
+- Casual expense phrasings (e.g. 「一萬八」, 「跟小華對分」) rely on the AI and may record the wrong person or amount — check the confirmation message; if the AI claims "logged" without actually logging, the bot catches it
+
+### 2. Model quality determines the experience
+
+- The default `qwen3.5:4b` is a compromise that runs smoothly on an 8GB GPU and scored 97% overall, but the test set is small and real use can still go wrong (see [Model choice](#-model-choice-measured))
+- Run `npm run eval` before switching models; newer isn't always better — some models write tool calls as text and can't log expenses at all
+
+### 3. The knowledge base is limited
+
+- ~60 dishes and ~80 terms; quality drops for regional dishes or uncommon terms
+- PRs to extend `src/knowledge/` are welcome (please include a source or how you verified it)
+
+### 4. Concurrent use queues up
+
+- All groups share one Ollama, which handles one AI request at a time. Each takes about 1–10 s, so when everyone sends photos at once, later requests wait
+- At most 3 queued per group and 8 in total; beyond that the bot asks everyone to wait
+- Commands that don't use the AI (settle up, notes, phrase book, clear expenses) aren't affected
+
+### 5. Photos
+
+- OCR often misreads handwritten, vertical or glare-affected text; the model also looks at the photo to correct it, but vertical signboards and ticket machines are still error-prone
+- An 8GB GPU can't run vision models of 7B or larger (see [Real-photo evaluation](#real-photo-evaluation-npm-run-evalphotos)); the local models have limited knowledge, e.g. they don't recognize shark fin and mistake omikuji for shimenawa
+- Menu items shown only as pictures, with no text, can't be explained
+
+### 6. When notes pile up
+
+- All notes go into the AI's context (up to 100). With many notes, a small model may not find the right one. A structured itinerary (day, time, place) is planned so questions like "where are we staying on day 3" can be answered by lookup
+
+### 7. LINE platform limits
+
+- Unverified LINE accounts can't get a group's member list, so register members with 「成員 …」 or have everyone talk to the bot at least once
+- When someone changes their LINE name, the ledger updates the next time they speak
+- Data is kept when the bot is removed from a group; re-inviting it to the same group continues the old ledger
+- Replies have a time limit (reply token); if the AI is too slow the reply may fail — enable `ALLOW_PUSH_FALLBACK` if needed (uses your monthly free push quota)
+
+### 8. Running costs
+
+- "Free" assumes you already have the computer, electricity and internet. See [Deployment](#️-deployment) for 24/7 power costs and backups
+- If it runs only on the home computer, the bot is completely unavailable when that computer is off; consider Architecture B
+
+### 9. Not yet available
+
+- Transit directions: Japanese rail data is license-restricted and the Google Maps API doesn't return public transit routes. Hand-curated common routes with Google Maps links are planned
+
+---
+
+## 🧪 Development
 
 ```bash
-npm test            # 單元測試（分帳、記帳解析、照片分類與安全偵測、句庫、記事、改名、路徑安全…）
-npm run typecheck   # TypeScript 型別檢查
-npm run eval -- qwen3.5:4b gemma3:4b   # 模型評測（需要 Ollama）
-npm run setup:model # 建立 context 加大的模型變體
-npm run chat -- 小明 # 本機 REPL，不需要 LINE
-npm run dev         # 開發模式（自動重啟）
-npm run backup      # 備份 data/
-npm run build       # 編譯到 dist/（Docker 會用到）
+npm test            # unit tests (bill splitting, expense parsing, photo classification and safety detection, phrase book, notes, renames, path safety…)
+npm run typecheck   # TypeScript type check
+npm run eval -- qwen3.5:4b gemma3:4b   # model evaluation (needs Ollama)
+npm run setup:model # create the model variant with a larger context
+npm run chat -- 小明 # local REPL, no LINE needed
+npm run dev         # dev mode (auto-restart)
+npm run backup      # back up data/
+npm run build       # compile to dist/ (used by Docker)
 ```
 
-## 📄 授權
+## 📄 License
 
 [MIT](LICENSE)
